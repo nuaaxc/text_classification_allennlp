@@ -16,6 +16,7 @@ from allennlp.common.file_utils import cached_path
 
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
+from allennlp.data.tokenizers.word_filter import StopwordFilter
 
 from allennlp.data.vocabulary import Vocabulary
 
@@ -95,8 +96,8 @@ class DBPediaDatasetReader(DatasetReader):
                  tokenizer: Tokenizer = None,
                  token_indexers: Dict[str, TokenIndexer] = None) -> None:
         super().__init__(lazy=lazy)
-        self._tokenizer = tokenizer or WordTokenizer()
-        self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
+        self._tokenizer = tokenizer or WordTokenizer(word_filter=StopwordFilter())
+        self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer(lowercase_tokens=True)}
 
     def _read(self, file_path: str) -> Iterator[Instance]:
         with open(file_path, encoding='utf-8') as f:

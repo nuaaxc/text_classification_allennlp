@@ -9,7 +9,9 @@ torch.manual_seed(2019)
 
 reader = DBPediaDatasetReader()
 
-train_dataset = reader.read(cached_path(DBPediaConfig.train_ratio_path % '10'))
+# train_dataset = reader.read(cached_path(DBPediaConfig.train_ratio_path % '10'))
 validation_dataset = reader.read(cached_path(DBPediaConfig.dev_ratio_path % '10'))
 
-print(validation_dataset)
+
+for instance in validation_dataset:
+    print(instance)
