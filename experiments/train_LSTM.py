@@ -1,17 +1,86 @@
 import torch
+import torch.optim as optim
 
 from allennlp.common.file_utils import cached_path
-from my_library.dataset_readers.dbpedia import DBPediaDatasetReader
 
-from config import DBPediaConfig
+from allennlp.data.token_indexers import PretrainedBertIndexer
+from allennlp.data.vocabulary import Vocabulary
+
+from allennlp.modules.text_field_embedders import TextFieldEmbedder, BasicTextFieldEmbedder
+from allennlp.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder
+from allennlp.data.iterators import BucketIterator
+from allennlp.training.trainer import Trainer
+
+from my_library.models import BertSentencePooling
+from my_library.models import BaseLSTM
+from my_library.dataset_readers.yahoo import YahooDatasetReader
+from config import YahooConfig
 
 torch.manual_seed(2019)
 
-reader = DBPediaDatasetReader()
+n_label = YahooConfig.n_label
+lr = 0.001
+USE_GPU = True
+epochs = 50
+patience = 10
+batch_size = 64
+config_file = YahooConfig
 
-# train_dataset = reader.read(cached_path(DBPediaConfig.train_ratio_path % '10'))
-validation_dataset = reader.read(cached_path(DBPediaConfig.dev_ratio_path % '10'))
+token_indexer = PretrainedBertIndexer(
+    pretrained_model=config_file.BERT_VOC,
+    # max_pieces=config_file.max_seq_len,
+    do_lowercase=True,
+)
+
+reader = YahooDatasetReader(tokenizer=lambda string: token_indexer.wordpiece_tokenizer(string)[:config_file.max_seq_len],
+                            token_indexers={"tokens": token_indexer}
+                            )
+
+train_dataset = reader.read(cached_path(config_file.train_ratio_path % '1'))
+validation_dataset = reader.read(cached_path(config_file.dev_ratio_path % '1'))
+# test_dataset = reader.read(cached_path(config_file.dev_ratio_path % '1'))
+
+vocab = Vocabulary.from_instances(train_dataset,
+                                  # min_count={'tokens': 2},
+                                  # only_include_pretrained_words=True,
+                                  max_vocab_size=config_file.max_vocab_size
+                                  )
+
+iterator = BucketIterator(batch_size=batch_size,
+                          biggest_batch_first=True,
+                          sorting_keys=[('tokens', 'num_tokens')],
+                          )
+iterator.index_with(vocab)
+
+bert_embedder = PretrainedBertEmbedder(
+    pretrained_model=config_file.BERT_MODEL,
+    top_layer_only=True,  # conserve memory
+)
+word_embeddings: TextFieldEmbedder = BasicTextFieldEmbedder({"tokens": bert_embedder},
+                                                            allow_unmatched_keys=True)
+
+encoder = BertSentencePooling(vocab, word_embeddings.get_output_dim())
+
+model = BaseLSTM(
+    vocab,
+    n_label,
+    word_embeddings,
+    encoder,
+)
 
 
-for instance in validation_dataset:
-    print(instance)
+if USE_GPU:
+    model.cuda()
+
+trainer = Trainer(
+    model=model,
+    optimizer=optim.Adam(model.parameters(), lr=lr),
+    iterator=iterator,
+    train_dataset=train_dataset,
+    validation_dataset=validation_dataset,
+    cuda_device=0 if USE_GPU else -1,
+    num_epochs=epochs,
+    patience=patience,
+)
+
+metrics = trainer.train()

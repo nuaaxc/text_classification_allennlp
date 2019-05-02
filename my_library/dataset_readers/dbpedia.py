@@ -1,7 +1,5 @@
 from typing import Iterator, List, Dict
 import logging
-import random
-from collections import defaultdict
 
 import torch
 import torch.optim as optim
@@ -30,63 +28,8 @@ from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.data.iterators import BucketIterator
 from allennlp.training.trainer import Trainer
 
-from config import DBPediaConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
-def train_dev_split(sample_ratio=0.1, split_ratio=0.9):
-    random.seed(2019)
-    label_example = defaultdict(list)
-    with open(DBPediaConfig.train_path, encoding='utf-8') as f:
-        for line in f:
-            # print(line)
-            label, _, _ = line.strip().split(',"')
-            label_example[label].append(line)
-
-    training_size = None
-    print('Training size for each class:')
-    for label, example_list in label_example.items():
-        training_size = len(example_list)
-        print(label, training_size)
-
-    sample_size = int(sample_ratio * training_size)
-    print('Sample size:', sample_size)
-
-    label_train_sample = defaultdict()
-    label_dev_sample = defaultdict()
-    for label, example_list in label_example.items():
-        samples = random.sample(example_list, sample_size)
-        random.shuffle(samples)
-        label_train_sample[label] = samples[:int(len(samples) * split_ratio)]
-        label_dev_sample[label] = samples[int(len(samples) * split_ratio):]
-
-    print('Sampled training set:')
-    for label, example_list in label_train_sample.items():
-        print(label, len(example_list))
-    print('Sampled dev set:')
-    for label, example_list in label_dev_sample.items():
-        print(label, len(example_list))
-
-    # Check
-    for label in label_example.keys():
-        all_examples = label_example[label]
-        sampled_train = label_train_sample[label]
-        sampled_dev = label_dev_sample[label]
-        assert len(set(sampled_train) & set(sampled_dev)) == 0
-        assert len(set(sampled_train) & set(all_examples)) == len(set(sampled_train))
-        assert len(set(sampled_dev) & set(all_examples)) == len(set(sampled_dev))
-
-    # save to file
-    print('saving sampled training set ...')
-    with open(DBPediaConfig.train_ratio_path % int(sample_ratio*100), 'w', encoding='utf-8') as f:
-        for label, samples in label_train_sample.items():
-            f.writelines(samples)
-    print('saving sampled dev set ...')
-    with open(DBPediaConfig.dev_ratio_path % int(sample_ratio * 100), 'w', encoding='utf-8') as f:
-        for label, samples in label_dev_sample.items():
-            f.writelines(samples)
-    print('saved.')
 
 
 @DatasetReader.register("dbpedia")
@@ -102,7 +45,7 @@ class DBPediaDatasetReader(DatasetReader):
     def _read(self, file_path: str) -> Iterator[Instance]:
         with open(file_path, encoding='utf-8') as f:
             for line in f:
-                label, title, abstract = line.strip().split(',"')
+                label, title, abstract = line.strip().split('","')
                 yield self.text_to_instance(title, abstract, label)
 
     def text_to_instance(self, title: str, abstract: str, label: str = None) -> Instance:  # type: ignore
@@ -117,4 +60,4 @@ class DBPediaDatasetReader(DatasetReader):
 
 
 if __name__ == '__main__':
-    train_dev_split(sample_ratio=0.1)
+    pass

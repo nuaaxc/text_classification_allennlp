@@ -5,16 +5,21 @@ class DirConfig(object):
     home = str(os.path.expanduser('~'))
     if 'C:' in home:
         W2V_DIR = os.path.join(home, 'Downloads/dataset/word_vec/')
+        BERT_VOC = os.path.join(home, 'Downloads/dataset/bert/bert-large-uncased-vocab.txt')
+        BERT_MODEL = os.path.join(home, 'Downloads/dataset/bert/bert-large-uncased.tar.gz')
     elif 'home' in home:
         W2V_DIR = '/home/xu052/glove/'
+        BERT_VOC = ''
+        BERT_MODEL = ''
     else:
         W2V_DIR = '/Users/xu052/Documents/project/glove/'
+        BERT_VOC = ''
+        BERT_MODEL = ''
 
 
 class DBPediaConfig(DirConfig):
     corpus_name = 'DBPedia'
 
-    root = ''
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/dbpedia')
     elif 'home' in DirConfig.home:
@@ -34,6 +39,31 @@ class DBPediaConfig(DirConfig):
               'Album',
               'Film',
               'WrittenWork']
+
+
+class YahooConfig(DirConfig):
+    corpus_name = 'Yahoo'
+    max_vocab_size = 100000
+    max_seq_len = 100
+
+    if 'C:' in DirConfig.home:
+        root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/yahoo')
+    elif 'home' in DirConfig.home:
+        root = '/home/xu052/text_classification/dataset/yahoo/'
+    else:
+        root = ''
+
+    labels = ['Society & Culture',
+              'Science & Mathematics',
+              'Health',
+              'Education & Reference',
+              'Computers & Internet',
+              'Sports',
+              'Business & Finance',
+              'Entertainment & Music',
+              'Family & Relationships',
+              'Politics & Government']
+    n_label = len(labels)
 
     data_dir = os.path.join(root, 'data')
     cache_dir = os.path.join(root, 'cache')
