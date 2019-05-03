@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.optim as optim
 
@@ -27,10 +28,16 @@ patience = 10
 batch_size = 64
 config_file = YahooConfig
 
+token_indexer = PretrainedBertIndexer(
+    pretrained_model=config_file.BERT_VOC,
+    # max_pieces=config_file.max_seq_len,
+    do_lowercase=True,
+)
 
-reader = YahooDatasetReader(tokenizer=lambda string: string.split(),
-                            token_indexers={"tokens": SingleIdTokenIndexer()}
-                            )
+reader = YahooDatasetReader(
+    tokenizer=lambda string: token_indexer.wordpiece_tokenizer(string)[:config_file.max_seq_len],
+    token_indexers={"tokens": token_indexer}
+)
 
 train_dataset = reader.read(cached_path(config_file.train_ratio_path % '1'))
 validation_dataset = reader.read(cached_path(config_file.dev_ratio_path % '1'))
@@ -50,13 +57,13 @@ iterator.index_with(vocab)
 
 bert_embedder = PretrainedBertEmbedder(
     pretrained_model=config_file.BERT_MODEL,
+    # requires_grad=True,
     top_layer_only=True,  # conserve memory
 )
-word_embeddings: TextFieldEmbedder = BasicTextFieldEmbedder(
-    {"tokens": Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                         embedding_dim=300)})
+word_embeddings: TextFieldEmbedder = BasicTextFieldEmbedder({"tokens": bert_embedder},
+                                                            allow_unmatched_keys=True)
 
-encoder = PytorchSeq2VecWrapper(torch.nn.LSTM(300, 128, batch_first=True))
+encoder = BertSentencePooling(vocab, word_embeddings.get_output_dim())
 
 model = BaseLSTM(
     vocab,
@@ -65,11 +72,7 @@ model = BaseLSTM(
     encoder,
 )
 
-if torch.cuda.is_available():
-    cuda_device = 0
-    model = model.cuda(cuda_device)
-else:
-    cuda_device = -1
+model = model.cuda(0)
 
 trainer = Trainer(
     model=model,
@@ -77,7 +80,7 @@ trainer = Trainer(
     iterator=iterator,
     train_dataset=train_dataset,
     validation_dataset=validation_dataset,
-    cuda_device=cuda_device,
+    cuda_device=0,
     num_epochs=epochs,
     patience=patience,
 )
