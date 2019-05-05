@@ -6,7 +6,6 @@ from allennlp.modules.seq2vec_encoders import Seq2VecEncoder
 class BertSentencePooling(Seq2VecEncoder):
     def __init__(self, vocab, bert_dim):
         super(BertSentencePooling, self).__init__(vocab)
-        self.projection = torch.nn.Linear(bert_dim, bert_dim)
         self.bert_dim = bert_dim
 
     @overrides
@@ -14,8 +13,8 @@ class BertSentencePooling(Seq2VecEncoder):
                 emb: torch.tensor,
                 mask: torch.tensor = None) -> torch.tensor:
         # extract first token tensor
-
-        return self.projection(emb[:, 0])
+        return emb[:, 0]
+        # return emb
 
     @overrides
     def get_input_dim(self) -> int:

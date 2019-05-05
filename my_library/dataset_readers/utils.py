@@ -1,4 +1,6 @@
 import random
+import os
+from tqdm import tqdm
 from collections import defaultdict
 
 from config import DBPediaConfig, YahooConfig
@@ -8,7 +10,7 @@ from my_library.dataset_readers.clearn_text import clean_normal_text
 def train_dev_split(config, sample_ratio=0.1, split_ratio=0.9):
     random.seed(2019)
     label_example = defaultdict(list)
-    with open(config.train_path, encoding='utf-8') as f:
+    with open(config.train_raw_path, encoding='utf-8') as f:
         for line in f:
             label = line.strip().split(',"')[0]
             label_example[label].append(line)
@@ -62,9 +64,21 @@ def train_dev_split(config, sample_ratio=0.1, split_ratio=0.9):
                 sample = clean_normal_text(sample)
                 f.write(sample)
                 f.write('\n')
+    if not os.path.exists(config.test_path):
+        print('saving test set ...')
+        with open(config.test_raw_path, 'r', encoding='utf-8') as f_test_raw:
+            lines = f_test_raw.readlines()
+            with open(config.test_path, 'w', encoding='utf-8') as f_test:
+                for line in tqdm(lines, total=len(lines)):
+                    line = clean_normal_text(line)
+                    f_test.write(line)
+                    f_test.write('\n')
     print('saved.')
 
 
 if __name__ == '__main__':
-    train_dev_split(YahooConfig, sample_ratio=0.01)
+    # train_dev_split(YahooConfig, sample_ratio=1)
+    train_dev_split(YahooConfig, sample_ratio=0.5)
+    # train_dev_split(YahooConfig, sample_ratio=0.1)
+    # train_dev_split(YahooConfig, sample_ratio=0.01)
 

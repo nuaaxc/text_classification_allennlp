@@ -1,3 +1,5 @@
+import logging
+
 import torch
 import torch.optim as optim
 
@@ -18,17 +20,22 @@ from my_library.models import BaseLSTM
 from my_library.dataset_readers.yahoo import YahooDatasetReader
 from config import YahooConfig
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 torch.manual_seed(2019)
 
-n_label = YahooConfig.n_label
-lr = 0.001
+# n_label = YahooConfig.n_label
+lr = 0.0001
 epochs = 50
+d_word_emb = 300
+d_rnn = 128
+d_hidden = 128
 patience = 10
 batch_size = 64
+dropout = 0.1
 config_file = YahooConfig
 
-
-reader = YahooDatasetReader(tokenizer=lambda string: string.split(),
+reader = YahooDatasetReader(tokenizer=lambda string: string.split()[:config_file.max_seq_len],
                             token_indexers={"tokens": SingleIdTokenIndexer()}
                             )
 
@@ -38,9 +45,14 @@ validation_dataset = reader.read(cached_path(config_file.dev_ratio_path % '1'))
 
 vocab = Vocabulary.from_instances(train_dataset,
                                   # min_count={'tokens': 2},
-                                  # only_include_pretrained_words=True,
-                                  max_vocab_size=config_file.max_vocab_size
+                                  only_include_pretrained_words=True,
+                                  max_vocab_size=config_file.max_vocab_size,
+                                  pretrained_files={'tokens': config_file.GLOVE_840B_300D},
                                   )
+
+# vocab.save_to_files("/tmp/vocabulary")
+
+logger.info('Vocab size: %s' % vocab.get_vocab_size())
 
 iterator = BucketIterator(batch_size=batch_size,
                           biggest_batch_first=True,
@@ -48,21 +60,23 @@ iterator = BucketIterator(batch_size=batch_size,
                           )
 iterator.index_with(vocab)
 
-bert_embedder = PretrainedBertEmbedder(
-    pretrained_model=config_file.BERT_MODEL,
-    top_layer_only=True,  # conserve memory
-)
 word_embeddings: TextFieldEmbedder = BasicTextFieldEmbedder(
     {"tokens": Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                         embedding_dim=300)})
+                         embedding_dim=d_word_emb)})
 
-encoder = PytorchSeq2VecWrapper(torch.nn.LSTM(300, 128, batch_first=True))
+encoder = PytorchSeq2VecWrapper(torch.nn.LSTM(
+    input_size=d_word_emb,
+    hidden_size=d_rnn,
+    num_layers=2,
+    dropout=dropout,
+    bidirectional=True, batch_first=True))
 
 model = BaseLSTM(
     vocab,
-    n_label,
     word_embeddings,
     encoder,
+    d_hidden,
+    dropout
 )
 
 if torch.cuda.is_available():
@@ -80,6 +94,7 @@ trainer = Trainer(
     cuda_device=cuda_device,
     num_epochs=epochs,
     patience=patience,
+    serialization_dir=config_file.model_path
 )
 
 metrics = trainer.train()

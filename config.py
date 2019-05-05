@@ -5,14 +5,17 @@ class DirConfig(object):
     home = str(os.path.expanduser('~'))
     if 'C:' in home:
         W2V_DIR = os.path.join(home, 'Downloads/dataset/word_vec/')
-        BERT_VOC = os.path.join(home, 'Downloads/dataset/bert/bert-large-uncased-vocab.txt')
-        BERT_MODEL = os.path.join(home, 'Downloads/dataset/bert/bert-large-uncased.tar.gz')
+        GLOVE_840B_300D = os.path.join(W2V_DIR, 'glove.840B.300d.txt')
+        BERT_VOC = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased-vocab.txt')
+        BERT_MODEL = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased.tar.gz')
     elif 'home' in home:
         W2V_DIR = '/home/xu052/glove/'
+        GLOVE_840B_300D = ''
         BERT_VOC = ''
         BERT_MODEL = ''
     else:
         W2V_DIR = '/Users/xu052/Documents/project/glove/'
+        GLOVE_840B_300D = ''
         BERT_VOC = ''
         BERT_MODEL = ''
 
@@ -70,8 +73,13 @@ class YahooConfig(DirConfig):
     model_dir = os.path.join(root, 'models')
     result_dir = os.path.join(root, 'results')
 
-    train_path = os.path.join(data_dir, 'train.csv')
+    vocab_path = os.path.join(cache_dir, 'vocab')
+    model_path = os.path.join(model_dir, 'model.th')
+    best_model_path = os.path.join(model_path, 'best.th')
+
+    train_raw_path = os.path.join(data_dir, 'train_raw.csv')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.csv')
     dev_ratio_path = os.path.join(data_dir, 'dev_%sp.csv')
+    test_raw_path = os.path.join(data_dir, 'test_raw.csv')
     test_path = os.path.join(data_dir, 'test.csv')
 

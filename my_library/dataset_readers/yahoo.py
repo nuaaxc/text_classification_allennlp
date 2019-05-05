@@ -3,7 +3,7 @@ import logging
 
 
 from allennlp.data import Instance
-from allennlp.data.fields import TextField, LabelField
+from allennlp.data.fields import TextField, LabelField, MetadataField
 
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.token_indexers import TokenIndexer
@@ -38,7 +38,7 @@ class YahooDatasetReader(DatasetReader):
     def text_to_instance(self, tokens: List[Token], label: str = None) -> Instance:  # type: ignore
         fields = {'tokens': TextField(tokens, self.token_indexers)}
         if label is not None:
-            fields['label'] = LabelField(label)
+            fields['labels'] = LabelField(label)
         return Instance(fields)
 
 

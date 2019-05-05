@@ -22,7 +22,7 @@ class Predictor:
 
     def _extract_data(self, batch) -> np.ndarray:
         out_dict = self.model(**batch)
-        return expit(tonp(out_dict["class_logits"]))
+        return expit(tonp(out_dict["logits"]))
 
     def predict(self, ds: Iterable[Instance]) -> np.ndarray:
         pred_generator = self.iterator(ds, num_epochs=1, shuffle=False)
