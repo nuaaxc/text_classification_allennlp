@@ -33,34 +33,37 @@ random.seed(2019)
 lr = 0.0001
 epochs = 50
 patience = 5
-batch_size = 256
+batch_size = 128
+instances_per_epoch = 320000
 d_hidden = 512
 dropout = 0.1
 # _lambda = 0.0
 _lambda = 0.1
 cuda_device = 0
+file_frac = 100
 config_file = YahooConfig
 
 
 class TrainBert(object):
 
     def __init__(self):
+
+        self.num_batch = int(instances_per_epoch / batch_size)
+
         token_indexer = PretrainedBertIndexer(
             pretrained_model=config_file.BERT_VOC,
             # max_pieces=config_file.max_seq_len,
             do_lowercase=True,
         )
         self.reader = YahooDatasetReader(
+            lazy=True,
             tokenizer=lambda string: token_indexer.wordpiece_tokenizer(string)[:config_file.max_seq_len],
             token_indexers={"tokens": token_indexer}
         )
         logger.info('loading training data ...')
-        self.train_dataset = self.reader.read(cached_path(config_file.train_ratio_path % '100'))
-
-        self.n_batch = int(len(list(self.train_dataset)) / batch_size)
-
+        self.train_dataset = self.reader.read(cached_path(config_file.train_ratio_path % file_frac))
         logger.info('loading validation data ...')
-        self.validation_dataset = self.reader.read(cached_path(config_file.dev_ratio_path % '100'))
+        self.validation_dataset = self.reader.read(cached_path(config_file.dev_ratio_path % file_frac))
 
         logger.info('building vocabulary ...')
         self.vocab = Vocabulary.from_instances(self.train_dataset,
@@ -71,7 +74,8 @@ class TrainBert(object):
         logger.info('Vocab size: %s' % self.vocab.get_vocab_size())
 
         self.train_iterator = BucketIterator(batch_size=batch_size,
-                                             # biggest_batch_first=True,
+                                             instances_per_epoch=instances_per_epoch,
+                                             max_instances_in_memory=32000,
                                              sorting_keys=[('tokens', 'num_tokens')],
                                              track_epoch=True,
                                              )
@@ -104,7 +108,7 @@ class TrainBert(object):
             shutil.rmtree(config_file.model_path)
 
         optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        lr_scheduler = NoamLR(optimizer=optimizer, model_size=768, warmup_steps=self.n_batch)
+        lr_scheduler = NoamLR(optimizer=optimizer, model_size=768, warmup_steps=self.num_batch)
 
         trainer = Trainer(
             model=self.model,
