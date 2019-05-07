@@ -1,4 +1,28 @@
 import re
+import spacy
+spacy_en = spacy.load('en_core_web_sm', disable=['parser', 'tagger', 'ner'])
+
+
+def clean_tweet_text(tweet):
+    processed_tweet = []
+    tweet = tweet.lower()  # lower case
+    tweet = re.sub(r'((www\.[\S]+)|(https?://[\S]+))', ' URL ', tweet)  # URLs
+    tweet = re.sub(r'@(\S+)', r'USER_\1', tweet)  # @handle
+    tweet = re.sub(r'#(\S+)', r' \1 ', tweet)  # #hashtag
+    tweet = re.sub(r'\brt\b', '', tweet)  # Remove RT
+    tweet = re.sub(r'\.{2,}', ' ', tweet)  # Replace 2+ dots with space
+    tweet = tweet.strip(' "\'')  # Strip space, " and ' from tweet
+    tweet = preprocess_emojis(tweet)  # Replace emojis with either EMO_POS or EMO_NEG
+    tweet = re.sub(r'\s+', ' ', tweet)  # Replace multiple spaces with a single space
+
+    for word in tweet.split():
+        word = preprocess_word(word)
+        if is_valid_word(word) and word not in stopwords:
+            processed_tweet.append(word)
+
+    tweet = ' '.join(processed_tweet)
+    tokens = [tok.lemma_ for tok in spacy_en.tokenizer(tweet) if tok.lemma]
+    return ' '.join(tokens)
 
 
 def clean_normal_text(string):
@@ -18,9 +42,9 @@ def clean_normal_text(string):
     string = string.lower()
     string = re.sub(r'\\n', ' ', string)
     string = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', string)  # URLs
-    string = re.sub(r'\S*@\S*\s?', '', string)                  # email
-    string = re.sub(r'(?<!\w)([a-z])\.', r'\1', string)         # remove periods in acronyms
-    string = re.sub(r'(?<!\w)([a-z])', r'\1', string)           # remove periods in acronyms
+    string = re.sub(r'\S*@\S*\s?', '', string)  # email
+    string = re.sub(r'(?<!\w)([a-z])\.', r'\1', string)  # remove periods in acronyms
+    string = re.sub(r'(?<!\w)([a-z])', r'\1', string)  # remove periods in acronyms
     # string = re.sub(r'e\.t\.r\.', 'etr', string)
     # string = re.sub(r"u\.s\.", " us ", string)
     # string = re.sub(r"u\.s\.a\.", " usa ", string)
@@ -30,7 +54,7 @@ def clean_normal_text(string):
     # string = re.sub(r"i\.e\.,", " ", string)
     # string = re.sub(r"i\.e\.", " ", string)
     string = re.sub(r"[^A-Za-z0-9,.!? ]", "", string)
-    string = re.sub(r'(.)\1+', r'\1\1', string)                 # remove duplicate character
+    string = re.sub(r'(.)\1+', r'\1\1', string)  # remove duplicate character
     string = re.sub(r'([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}', '', string)
     string = re.sub(r",", " SEP ", string)
     string = re.sub(r"br", "", string)
@@ -39,7 +63,7 @@ def clean_normal_text(string):
     string = re.sub(r"\.", " SEP ", string)
     string = re.sub(r"\s{2,}", " ", string)
     string = re.sub(r'[-|\']', '', string)
-    string = re.sub(r'\b(\w+)( \1\b)+', r'\1', string)          # remove repeated words
+    string = re.sub(r'\b(\w+)( \1\b)+', r'\1', string)  # remove repeated words
     string = re.sub(r'SEP', '[SEP]', string)
     return string.strip()
 
@@ -49,10 +73,12 @@ def is_valid_word(word):
 
 
 def preprocess_word(word):
-    word = word.strip('“”\'"?!,.():;‘’')            # Remove punctuation
-    word = re.sub(r'(.)\1+', r'\1\1', word)     # Convert >= 2 letter repetitions to 2 letter, e.g., funnnnny --> funny
-    word = re.sub(r'[-|\']', '', word)          # Remove - & '
-    word = re.sub(r"""(?:^(?:never|no|nothing|nowhere|noone|none|not|havent|hasnt|hadnt|cant|couldnt|shouldnt|wont|wouldnt|dont|doesnt|didnt|isnt|arent|aint)$)|n't""", 'NEGATION', word)
+    word = word.strip('“”\'"?!,.():;‘’')  # Remove punctuation
+    word = re.sub(r'(.)\1+', r'\1\1', word)  # Convert >= 2 letter repetitions to 2 letter, e.g., funnnnny --> funny
+    word = re.sub(r'[-|\']', '', word)  # Remove - & '
+    word = re.sub(
+        r"""(?:^(?:never|no|nothing|nowhere|noone|none|not|havent|hasnt|hadnt|cant|couldnt|shouldnt|wont|wouldnt|dont|doesnt|didnt|isnt|arent|aint)$)|n't""",
+        'NEGATION', word)
     return word
 
 
@@ -72,32 +98,33 @@ def preprocess_emojis(tweet):
     return tweet
 
 
-def preprocess(tweet, remove=True):
-    processed_tweet = []
-    tweet = tweet.lower()  # lower case
-    tweet = re.sub(r'((www\.[\S]+)|(https?://[\S]+))', ' URL ', tweet)  # URLs
-    if remove:
-        tweet = re.sub(r'@(\S+)', '', tweet)  # remove @handle
-        tweet = re.sub(r'#(\S+)', '', tweet)  # remove #hashtag
-    else:
-        tweet = re.sub(r'@(\S+)', r'USER_\1', tweet)  # @handle
-        tweet = re.sub(r'#(\S+)', r' \1 ', tweet)  # #hashtag
-    tweet = re.sub(r'\brt\b', '', tweet)    # Remove RT
-    tweet = re.sub(r'\.{2,}', ' ', tweet)   # Replace 2+ dots with space
-    if remove:
-        tweet = re.sub(r'adani', '', tweet)     # remove adani
-        tweet = re.sub(r'bhp', '', tweet)       # remove bhp
-        tweet = re.sub(r'santos', '', tweet)  # remove santos
-        tweet = re.sub(r'rioTinto', '', tweet)  # remove rioTinto
-        tweet = re.sub(r'fortescue', '', tweet)  # remove fortescue
-    tweet = tweet.strip(' "\'')  # Strip space, " and ' from tweet
-    tweet = preprocess_emojis(tweet)  # Replace emojis with either EMO_POS or EMO_NEG
-    tweet = re.sub(r'\s+', ' ', tweet)  # Replace multiple spaces with a single space
-
-    words = tweet.split()
-    for word in words:
-        word = preprocess_word(word)
-        if is_valid_word(word):
-            processed_tweet.append(word)
-
-    return ' '.join(processed_tweet)
+stopwords = set(["semst", "\"", "#", "$", "%", "&", "\\", "'", "(", ")",
+                 "*", ",", "-", ".", "/", ":", ";", "<", ">", "@",
+                 "[", "]", "^", "_", "`", "{", "|", "}", "~", "=", "+", "!", "?"] + \
+                ["a", "about", "above", "after", "again", "am", "an", "and", "any", "are", "as", "at",
+                 "be",
+                 "because", "been", "before", "being", "below", "between", "both", "but", "by", "could", "did", "do",
+                 "does",
+                 "doing", "down", "during", "each", "few", "for", "from", "further", "had", "has", "have", "having",
+                 "he",
+                 "he'd",
+                 "he'll", "he's", "her", "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's",
+                 "i",
+                 "i'd",
+                 "i'll", "i'm", "i've", "if", "in", "into", "is", "it", "it's", "its", "itself", "let's", "me", "more",
+                 "most",
+                 "my", "myself", "nor", "of", "on", "once", "or", "other", "ought", "our", "ours", "ourselves",
+                 "out",
+                 "over", "own", "same", "she", "she'd", "she'll", "she's", "should", "so", "some", "such", "than",
+                 "that",
+                 "that's",
+                 "the", "their", "theirs", "them", "themselves", "then", "there", "there's", "these", "they", "they'd",
+                 "they'll",
+                 "they're", "they've", "this", "those", "through", "to", "too", "under", "until", "up", "very", "was",
+                 "we",
+                 "we'd", "will",
+                 "we'll", "we're", "we've", "were", "what", "what's", "when", "when's", "where", "where's", "which",
+                 "while", "who",
+                 "who's", "whom", "why", "why's", "with", "would", "you", "you'd", "you'll", "you're", "you've", "your",
+                 "yours",
+                 "yourself", "yourselves"])

@@ -84,7 +84,7 @@ class YahooConfig(DirConfig):
     test_path = os.path.join(data_dir, 'test.csv')
 
 
-class Stance(DirConfig):
+class StanceConfig(DirConfig):
     corpus_name = 'Stance'
     max_vocab_size = 10000
     max_seq_len = 20
@@ -96,12 +96,23 @@ class Stance(DirConfig):
     else:
         root = ''
 
+    target = ['a', 'cc', 'fm', 'hc', 'la']
+
     labels = [
-        ''
+        'FAVOR',
+        'AGAINST',
+        'NONE'
     ]
 
-    train_raw_path = os.path.join(data_dir, 'train_raw.csv')
-    train_ratio_path = os.path.join(data_dir, 'train_%sp.csv')
-    dev_ratio_path = os.path.join(data_dir, 'dev_%sp.csv')
-    test_raw_path = os.path.join(data_dir, 'test_raw.csv')
-    test_path = os.path.join(data_dir, 'test.csv')
+    n_label = len(labels)
+
+    data_dir = os.path.join(root, 'data')
+    cache_dir = os.path.join(root, 'cache')
+    model_dir = os.path.join(root, 'models')
+    result_dir = os.path.join(root, 'results')
+
+    train_raw_path = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-%s.txt')
+    train_ratio_path = os.path.join(data_dir, 'train_%s_%sp.txt')
+    dev_ratio_path = os.path.join(data_dir, 'dev_%s_%sp.txt')
+    test_raw_path = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-%s.txt')
+    test_path = os.path.join(data_dir, 'test_%s.txt')
