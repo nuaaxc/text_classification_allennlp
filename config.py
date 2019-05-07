@@ -86,8 +86,19 @@ class YahooConfig(DirConfig):
 
 class StanceConfig(DirConfig):
     corpus_name = 'Stance'
-    max_vocab_size = 10000
-    max_seq_len = 20
+    max_vocab_size = 100000
+    max_seq_len = 30
+
+    lr = 0.0001
+    epochs = 999
+    patience = 5
+    batch_size = 8
+    d_hidden = 100
+    dropout = 0.2
+    # _lambda = 0.0
+    lambda_ = 0.0
+    cuda_device = 0
+    file_frac = 100
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/stance')
@@ -110,6 +121,10 @@ class StanceConfig(DirConfig):
     cache_dir = os.path.join(root, 'cache')
     model_dir = os.path.join(root, 'models')
     result_dir = os.path.join(root, 'results')
+
+    vocab_path = os.path.join(cache_dir, 'vocab')
+    model_path = os.path.join(model_dir, 'model.th')
+    best_model_path = os.path.join(model_path, 'best.th')
 
     train_raw_path = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-%s.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%s_%sp.txt')

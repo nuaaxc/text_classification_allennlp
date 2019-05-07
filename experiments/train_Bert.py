@@ -23,47 +23,35 @@ from my_library.models import BertSentencePooling
 from my_library.models import BaseLSTM
 from my_library.predictors import Predictor
 from my_library.dataset_readers.yahoo import YahooDatasetReader
-from config import YahooConfig
+from my_library.dataset_readers.stance import StanceDatasetReader
+from config import YahooConfig, StanceConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 torch.manual_seed(2019)
 random.seed(2019)
 
-lr = 0.0001
-epochs = 50
-patience = 5
-batch_size = 128
-instances_per_epoch = 320000
-d_hidden = 512
-dropout = 0.1
-# _lambda = 0.0
-_lambda = 0.1
-cuda_device = 0
-file_frac = 100
-config_file = YahooConfig
+
+config_file = StanceConfig
 
 
 class TrainBert(object):
 
-    def __init__(self):
+    def __init__(self, training_file, dev_file, test_file, reader):
+        self.training_file = training_file
+        self.dev_file = dev_file
+        self.test_file = test_file
 
-        self.num_batch = int(instances_per_epoch / batch_size)
-
-        token_indexer = PretrainedBertIndexer(
-            pretrained_model=config_file.BERT_VOC,
-            # max_pieces=config_file.max_seq_len,
-            do_lowercase=True,
-        )
-        self.reader = YahooDatasetReader(
+        token_indexer = PretrainedBertIndexer(pretrained_model=config_file.BERT_VOC, do_lowercase=True)
+        self.reader = reader(
             lazy=True,
             tokenizer=lambda string: token_indexer.wordpiece_tokenizer(string)[:config_file.max_seq_len],
             token_indexers={"tokens": token_indexer}
         )
         logger.info('loading training data ...')
-        self.train_dataset = self.reader.read(cached_path(config_file.train_ratio_path % file_frac))
+        self.train_dataset = self.reader.read(cached_path(self.training_file))
         logger.info('loading validation data ...')
-        self.validation_dataset = self.reader.read(cached_path(config_file.dev_ratio_path % file_frac))
+        self.validation_dataset = self.reader.read(cached_path(self.dev_file))
 
         logger.info('building vocabulary ...')
         self.vocab = Vocabulary.from_instances(self.train_dataset,
@@ -73,9 +61,9 @@ class TrainBert(object):
                                                )
         logger.info('Vocab size: %s' % self.vocab.get_vocab_size())
 
-        self.train_iterator = BucketIterator(batch_size=batch_size,
-                                             instances_per_epoch=instances_per_epoch,
-                                             max_instances_in_memory=32000,
+        self.train_iterator = BucketIterator(batch_size=config_file.batch_size,
+                                             # instances_per_epoch=instances_per_epoch,
+                                             # max_instances_in_memory=32000,
                                              sorting_keys=[('tokens', 'num_tokens')],
                                              track_epoch=True,
                                              )
@@ -96,31 +84,33 @@ class TrainBert(object):
             self.vocab,
             word_embeddings,
             encoder,
-            d_hidden,
-            dropout,
-            cuda_device,
-            _lambda
-        ).cuda(cuda_device)
+            config_file.d_hidden,
+            config_file.dropout,
+            config_file.cuda_device,
+            config_file.lambda_
+        ).cuda(config_file.cuda_device)
 
     def train(self):
 
         if os.path.exists(config_file.model_path):
             shutil.rmtree(config_file.model_path)
 
-        optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        lr_scheduler = NoamLR(optimizer=optimizer, model_size=768, warmup_steps=self.num_batch)
+        optimizer = optim.Adam(self.model.parameters(), lr=config_file.lr)
+        lr_scheduler = NoamLR(optimizer=optimizer,
+                              model_size=config_file.d_hidden,
+                              warmup_steps=100)
 
         trainer = Trainer(
             model=self.model,
             optimizer=optimizer,
-            learning_rate_scheduler=lr_scheduler,
+            # learning_rate_scheduler=lr_scheduler,
             iterator=self.train_iterator,
             train_dataset=self.train_dataset,
             validation_dataset=self.validation_dataset,
             validation_metric='-loss',
-            cuda_device=cuda_device,
-            num_epochs=epochs,
-            patience=patience,
+            cuda_device=config_file.cuda_device,
+            num_epochs=config_file.epochs,
+            patience=config_file.patience,
             num_serialized_models_to_keep=2,
             serialization_dir=config_file.model_path
         )
@@ -130,7 +120,7 @@ class TrainBert(object):
     def test(self):
         logger.info('Testing ...')
         logger.info('loading test set ...')
-        test_dataset = self.reader.read(cached_path(config_file.test_path))
+        test_dataset = self.reader.read(cached_path(self.test_file))
         y_true = np.array([self.vocab.get_token_index(sample.fields['labels'].label,
                                                       namespace='labels')
                            for sample in test_dataset])
@@ -140,7 +130,7 @@ class TrainBert(object):
         with open(config_file.best_model_path, 'rb') as f:
             self.model.load_state_dict(torch.load(f))
         logger.info('predicting ...')
-        predictor = Predictor(self.model, test_iterator, cuda_device)
+        predictor = Predictor(self.model, test_iterator, config_file.cuda_device)
         test_pred_probs = predictor.predict(test_dataset)
         test_pred_labels = np.argmax(test_pred_probs, axis=1)
         print(metrics.classification_report(y_true, test_pred_labels))
@@ -152,7 +142,16 @@ class TrainBert(object):
         }
 
 
-if __name__ == '__main__':
-    learning = TrainBert()
+def experiment_stance():
+    stance_target = 'a'
+    learning = TrainBert(training_file=config_file.train_ratio_path % (stance_target, config_file.file_frac),
+                         dev_file=config_file.dev_ratio_path % (stance_target, config_file.file_frac),
+                         test_file=config_file.test_path % stance_target,
+                         reader=StanceDatasetReader)
     learning.train()
     print(learning.test())
+
+
+if __name__ == '__main__':
+    experiment_stance()
+
