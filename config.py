@@ -83,3 +83,25 @@ class YahooConfig(DirConfig):
     test_raw_path = os.path.join(data_dir, 'test_raw.csv')
     test_path = os.path.join(data_dir, 'test.csv')
 
+
+class Stance(DirConfig):
+    corpus_name = 'Stance'
+    max_vocab_size = 10000
+    max_seq_len = 20
+
+    if 'C:' in DirConfig.home:
+        root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/stance')
+    elif 'home' in DirConfig.home:
+        root = '/home/xu052/text_classification/dataset/stance/'
+    else:
+        root = ''
+
+    labels = [
+        ''
+    ]
+
+    train_raw_path = os.path.join(data_dir, 'train_raw.csv')
+    train_ratio_path = os.path.join(data_dir, 'train_%sp.csv')
+    dev_ratio_path = os.path.join(data_dir, 'dev_%sp.csv')
+    test_raw_path = os.path.join(data_dir, 'test_raw.csv')
+    test_path = os.path.join(data_dir, 'test.csv')
