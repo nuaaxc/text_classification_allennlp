@@ -95,8 +95,8 @@ class StanceConfig(DirConfig):
     batch_size = 8
     d_hidden = 100
     dropout = 0.2
-    # _lambda = 0.0
     lambda_ = 0.0
+    # lambda_ = 0.1
     cuda_device = 0
     file_frac = 100
 
