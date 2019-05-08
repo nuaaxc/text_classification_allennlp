@@ -37,10 +37,12 @@ config_file = StanceConfig
 
 class TrainBert(object):
 
-    def __init__(self, training_file, dev_file, test_file, reader):
+    def __init__(self, training_file, dev_file, test_file, model_path, hparam, reader):
         self.training_file = training_file
         self.dev_file = dev_file
         self.test_file = test_file
+        self.model_path = model_path
+        self.hparam = hparam
 
         token_indexer = PretrainedBertIndexer(pretrained_model=config_file.BERT_VOC, do_lowercase=True)
         self.reader = reader(
@@ -61,7 +63,7 @@ class TrainBert(object):
                                                )
         logger.info('Vocab size: %s' % self.vocab.get_vocab_size())
 
-        self.train_iterator = BucketIterator(batch_size=config_file.batch_size,
+        self.train_iterator = BucketIterator(batch_size=self.hparam['batch_size'],
                                              # instances_per_epoch=instances_per_epoch,
                                              # max_instances_in_memory=32000,
                                              sorting_keys=[('tokens', 'num_tokens')],
@@ -84,20 +86,20 @@ class TrainBert(object):
             self.vocab,
             word_embeddings,
             encoder,
-            config_file.d_hidden,
-            config_file.dropout,
-            config_file.cuda_device,
-            config_file.lambda_
-        ).cuda(config_file.cuda_device)
+            self.hparam['d_hidden'],
+            self.hparam['dropout'],
+            self.hparam['cuda_device'],
+            self.hparam['lambda']
+        ).cuda(self.hparam['cuda_device'])
 
     def train(self):
 
         if os.path.exists(config_file.model_path):
             shutil.rmtree(config_file.model_path)
 
-        optimizer = optim.Adam(self.model.parameters(), lr=config_file.lr)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.hparam['lr'])
         lr_scheduler = NoamLR(optimizer=optimizer,
-                              model_size=config_file.d_hidden,
+                              model_size=self.hparam['d_hidden'],
                               warmup_steps=100)
 
         trainer = Trainer(
@@ -108,11 +110,11 @@ class TrainBert(object):
             train_dataset=self.train_dataset,
             validation_dataset=self.validation_dataset,
             validation_metric='-loss',
-            cuda_device=config_file.cuda_device,
-            num_epochs=config_file.epochs,
-            patience=config_file.patience,
-            num_serialized_models_to_keep=2,
-            serialization_dir=config_file.model_path
+            cuda_device=self.hparam['cuda_device'],
+            num_epochs=self.hparam['epochs'],
+            patience=self.hparam['patience'],
+            num_serialized_models_to_keep=1,
+            serialization_dir=self.model_path
         )
 
         trainer.train()
@@ -127,10 +129,10 @@ class TrainBert(object):
         test_iterator = BasicIterator(batch_size=128, track_epoch=True)
         test_iterator.index_with(self.vocab)
         logger.info('loading best model ...')
-        with open(config_file.best_model_path, 'rb') as f:
+        with open(os.path.join(self.model_path, 'best.th'), 'rb') as f:
             self.model.load_state_dict(torch.load(f))
         logger.info('predicting ...')
-        predictor = Predictor(self.model, test_iterator, config_file.cuda_device)
+        predictor = Predictor(self.model, test_iterator, self.hparam['cuda_device'])
         test_pred_probs = predictor.predict(test_dataset)
         test_pred_labels = np.argmax(test_pred_probs, axis=1)
         print(metrics.classification_report(y_true, test_pred_labels))
@@ -144,9 +146,20 @@ class TrainBert(object):
 
 def experiment_stance():
     stance_target = 'a'
-    learning = TrainBert(training_file=config_file.train_ratio_path % (stance_target, config_file.file_frac),
-                         dev_file=config_file.dev_ratio_path % (stance_target, config_file.file_frac),
+    hparam = config_file.hparam[stance_target]
+    model_path = config_file.model_path % '_'.join(['tgt', stance_target,
+                                                    'lambda', str(hparam['lambda']),
+                                                    'lr', str(hparam['lr']),
+                                                    'bs', str(hparam['batch_size']),
+                                                    'h', str(hparam['d_hidden']),
+                                                    'dropout', str(hparam['dropout']),
+                                                    'frac', str(hparam['file_frac'])])
+
+    learning = TrainBert(training_file=config_file.train_ratio_path % (stance_target, hparam['file_frac']),
+                         dev_file=config_file.dev_ratio_path % (stance_target, hparam['file_frac']),
                          test_file=config_file.test_path % stance_target,
+                         model_path=model_path,
+                         hparam=hparam,
                          reader=StanceDatasetReader)
     learning.train()
     print(learning.test())
