@@ -145,7 +145,7 @@ class TrainBert(object):
 
 
 def experiment_stance():
-    stance_target = 'a'
+    stance_target = 'cc'
     hparam = config_file.hparam[stance_target]
     model_path = config_file.model_path % '_'.join(['tgt', stance_target,
                                                     'lambda', str(hparam['lambda']),

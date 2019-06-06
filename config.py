@@ -100,6 +100,18 @@ class StanceConfig(DirConfig):
             'lambda': 0,
             'cuda_device': 0,
             'file_frac': 100,
+        },
+
+        'cc': {
+            'lr': 0.0001,
+            'epochs': 999,
+            'patience': 5,
+            'batch_size': 8,
+            'd_hidden': 100,
+            'dropout': 0.3,
+            'lambda': 0,
+            'cuda_device': 0,
+            'file_frac': 100,
         }
     }
 
