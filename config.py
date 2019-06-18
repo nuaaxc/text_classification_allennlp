@@ -6,6 +6,7 @@ class DirConfig(object):
     if 'C:' in home:
         W2V_DIR = os.path.join(home, 'Downloads/dataset/word_vec/')
         GLOVE_840B_300D = os.path.join(W2V_DIR, 'glove.840B.300d.txt')
+        GLOVE_TWITTER_27B_200D = os.path.join(W2V_DIR, 'glove.twitter.27B.200d.txt')
         BERT_VOC = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased-vocab.txt')
         BERT_MODEL = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased.tar.gz')
     elif 'home' in home:

@@ -4,24 +4,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from allennlp.common.params import Params
-from allennlp.data import Vocabulary
 from allennlp.modules import FeedForward, Seq2VecEncoder, TextFieldEmbedder
 from allennlp.models.model import Model
 from allennlp.nn.util import get_text_field_mask
 
 
-@Model.register("feature_extractor")
+@Model.register("feature-extractor-base")
 class FeatureExtractor(Model):
 
     def __init__(self,
-                 vocab: Vocabulary,
                  text_field_embedder: TextFieldEmbedder,
                  text_encoder: Seq2VecEncoder,
                  d_hidden: int,
                  dropout: float,
                  ) -> None:
-        super(FeatureExtractor, self).__init__(vocab)
+        super(FeatureExtractor, self).__init__(None)
 
         self.text_field_embedder = text_field_embedder
         self.text_encoder = text_encoder
@@ -41,9 +38,3 @@ class FeatureExtractor(Model):
 
         return output_dict
 
-    @classmethod
-    def from_params(cls,  # type: ignore
-                    vocab: Vocabulary,
-                    params: Params,
-                    **extras) -> 'FeatureExtractor':
-        pass

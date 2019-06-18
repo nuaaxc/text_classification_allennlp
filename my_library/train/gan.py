@@ -1,16 +1,20 @@
 from typing import Dict, Iterable, Any
-
+import logging
 import tqdm
 import torch
 import numpy as np
 
+from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
 from allennlp.data import Instance
+from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.iterators import DataIterator
 from allennlp.models import Model
 from allennlp.training.trainer_base import TrainerBase
 from allennlp.training.optimizers import Optimizer
+
+from my_library.models.data_augmentation.feature_extractor import FeatureExtractor
 
 
 @TrainerBase.register("gan-base")
@@ -116,23 +120,44 @@ class GanTrainer(TrainerBase):
                     serialization_dir: str,
                     recover: bool = False) -> 'GanTrainer':
 
-        training_file = params.pop("training_file")
-        dev_file = params.pop("dev_file")
-        test_file = params.pop("test_file")
-        print(training_file)
-        print(dev_file)
-        print(test_file)
-        exit()
-        dataset_reader = DatasetReader.from_params(params.pop("data_reader"))
-        data = dataset_reader.read("")
+        config_file = params.pop('config_file')
+        stance_target = params.pop('stance_target')
+        training_file = params.pop('training_file')
+        dev_file = params.pop('dev_file')
+        test_file = params.pop('test_file')
+
+        # Data reader
+        reader = DatasetReader.from_params(params.pop('data_reader'))
+        train_dataset = reader.read(cached_path(training_file))
+        validation_dataset = reader.read(cached_path(dev_file))
 
         noise_reader = DatasetReader.from_params(params.pop("noise_reader"))
         noise = noise_reader.read("")
 
+        # Vocabulary
+        vocab = Vocabulary.from_instances(train_dataset,
+                                          # min_count={'tokens': 2},
+                                          only_include_pretrained_words=True,
+                                          max_vocab_size=config_file.max_vocab_size,
+                                          pretrained_files={'tokens': config_file.GLOVE_TWITTER_27B_200D},
+                                          )
+        print('Vocab size: %s' % vocab.get_vocab_size())
+
+        # Iterator
+        training_iterator = DataIterator.from_params(params.pop("training_iterator"))
+        training_iterator.index_with(vocab)
+
+        noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
+
+        # Feature_extractor
+        feature_extractor = FeatureExtractor.from_params(params.pop("feature_extractor"))
+
+        exit()
+        # Generator
         generator = Model.from_params(params.pop("generator"))
         discriminator = Model.from_params(params.pop("discriminator"))
-        iterator = DataIterator.from_params(params.pop("iterator"))
-        noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
+
+
 
         generator_optimizer = Optimizer.from_params(
             [[n, p] for n, p in generator.named_parameters() if p.requires_grad],

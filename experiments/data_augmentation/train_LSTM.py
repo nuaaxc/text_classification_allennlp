@@ -153,21 +153,56 @@ def experiment_stance():
 
     params_ = Params(
         {
+            "config_file": config_file,
+            "stance_target": stance_target,
             "training_file": config_file.train_ratio_path % (stance_target, hparam['file_frac']),
             "dev_file": config_file.dev_ratio_path % (stance_target, hparam['file_frac']),
             "test_file": config_file.test_path % stance_target,
             "trainer": {
                 "type": "gan-base"
             },
-            "data_reader": {"type": "stance"},
+
+            # Readers
+            "data_reader": {"type": "stance",
+                            "lazy": True,
+                            "token_indexers": {
+                                "type": "single_id"
+                            }},
             "noise_reader": {"type": "sampling", "sampler": {"type": "uniform"}},
-            "feature_extractor": {"type": "feature_extractor",
-                                  "text_field_embedder": {
-                                      "type": "basic",
-                                      "tokens": {
-                                          "type": "embedding",
-                                      },
-                                  }},
+
+            # Iterators
+            "training_iterator": {
+                "type": "bucket",
+                "batch_size": config_file.hparam[stance_target]['batch_size'],
+                "sorting_keys": [('tokens', 'num_tokens')],
+                "track_epoch": False
+            },
+            "noise_iterator": {
+                "type": "basic",
+                "batch_size": config_file.hparam[stance_target]['batch_size']
+            },
+
+            # Modules
+            "feature_extractor": {
+                "type": "feature-extractor-base",
+                "text_field_embedder": {
+                    "type": "basic",
+                    "token_embedders": {"tokens": {
+                        "type": "embedding",
+                    }},
+                },
+                "text_encoder": {
+                    "type": "lstm",
+                    "input_size": config_file.hparam[stance_target]['d_word_emb'],
+                    "hidden_size": config_file.hparam[stance_target]['d_rnn'],
+                    "num_layers": 2,
+                    "batch_first": True,
+                    "dropout": config_file.hparam[stance_target]['dropout'],
+                    "bidirectional": True,
+                },
+                "d_hidden": 128,
+                "dropout": 0.1
+            },
             "generator": {
                 "type": "generator-base",
                 "input_dim": 1,
@@ -179,14 +214,6 @@ def experiment_stance():
                 "input_dim": 128,
                 "hidden_dim": 10,
                 "preprocessing": "moments"
-            },
-            "iterator": {
-                "type": "basic",
-                "batch_size": 128
-            },
-            "noise_iterator": {
-                "type": "basic",
-                "batch_size": 128
             },
             "generator_optimizer": {"type": "sgd", "lr": 0.1},
             "discriminator_optimizer": {"type": "sgd", "lr": 0.1},
