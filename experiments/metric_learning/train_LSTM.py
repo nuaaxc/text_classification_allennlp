@@ -15,7 +15,6 @@ from allennlp.data.iterators import BucketIterator
 from allennlp.training.trainer import Trainer
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
 
-from my_library.models import BertSentencePooling
 from my_library.models import BaseLSTM
 from my_library.dataset_readers.yahoo import YahooDatasetReader
 from config import YahooConfig

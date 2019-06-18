@@ -86,7 +86,7 @@ class YahooConfig(DirConfig):
 
 class StanceConfig(DirConfig):
     corpus_name = 'Stance'
-    max_vocab_size = 100000
+    max_vocab_size = 10000
     max_seq_len = 30
 
     hparam = {
@@ -95,6 +95,8 @@ class StanceConfig(DirConfig):
             'epochs': 999,
             'patience': 5,
             'batch_size': 8,
+            'd_word_emb': 300,
+            'd_rnn': 128,
             'd_hidden': 100,
             'dropout': 0.3,
             'lambda': 0,
@@ -107,6 +109,8 @@ class StanceConfig(DirConfig):
             'epochs': 999,
             'patience': 5,
             'batch_size': 8,
+            'd_word_emb': 300,
+            'd_rnn': 128,
             'd_hidden': 100,
             'dropout': 0.3,
             'lambda': 0,
