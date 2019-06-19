@@ -23,7 +23,7 @@ class Discriminator(Model):
                  d_hidden: int,
                  n_layers: int,
                  dropout: float,
-                 activation: Activation = torch.nn.Sigmoid(),
+                 activation: Activation,
                  preprocessing: str = None) -> None:
         super().__init__(None)
         assert n_layers >= 2
@@ -35,21 +35,22 @@ class Discriminator(Model):
         else:
             raise ConfigurationError("unknown preprocessing")
 
-        self.model = FeedForward(input_dim=d_input,
-                                 num_layers=n_layers,
-                                 hidden_dims=[d_hidden] * (n_layers - 1) + [1],
-                                 activations=activation,
-                                 dropout=dropout)
+        self.feed_forward = FeedForward(input_dim=d_input,
+                                        num_layers=n_layers,
+                                        hidden_dims=[d_hidden] * (n_layers - 1) + [1],
+                                        activations=[activation] * (n_layers - 1) + [torch.nn.Sigmoid()],
+                                        dropout=dropout)
 
         self.loss = torch.nn.BCELoss()
 
     def forward(self,  # type: ignore
                 inputs: torch.Tensor,
-                label: torch.Tensor = None) -> Dict[str, torch.Tensor]:
+                labels: torch.Tensor = None) -> Dict[str, torch.Tensor]:
         inputs = inputs.squeeze(-1)
-        output = self.model(self.preprocess(inputs))
+        output = self.feed_forward(self.preprocess(inputs))
+        output = torch.clamp(output, min=0., max=1.)
         output_dict = {"output": output}
-        if label is not None:
-            output_dict["loss"] = self.loss(output, label)
+        if labels is not None:
+            output_dict["loss"] = self.loss(output, labels)
 
         return output_dict

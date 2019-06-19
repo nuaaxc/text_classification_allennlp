@@ -117,13 +117,15 @@ def experiment_stance():
                 "d_hidden": config_file.hparam[stance_target]['d_hidden'],
                 "n_layers": 2,
                 "dropout": config_file.hparam[stance_target]['dropout'],
-                "preprocessing": "moments"
+                'activation': 'relu',
+                "preprocessing": None,
             },
-            "generator_optimizer": {"type": "sgd", "lr": 0.1},
-            "discriminator_optimizer": {"type": "sgd", "lr": 0.1},
+            "generator_optimizer": {"type": "adam", "lr": 0.0005},
+            "discriminator_optimizer": {"type": "adam", "lr": 0.0005},
             "num_epochs": 100,
             "batches_per_epoch": 100,
             "batch_size": config_file.hparam[stance_target]['batch_size'],
+            "cuda_device": config_file.hparam[stance_target]['cuda_device'],
         })
 
     import tempfile

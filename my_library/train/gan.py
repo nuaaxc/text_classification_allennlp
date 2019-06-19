@@ -6,13 +6,19 @@ import numpy as np
 
 from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
+from allennlp.common.util import (dump_metrics, gpu_memory_mb, peak_memory_mb,
+                                  lazy_groups_of)
 from allennlp.data import Instance
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.iterators import DataIterator
 from allennlp.models import Model
+from allennlp.nn import util as nn_util
 from allennlp.training.trainer_base import TrainerBase
 from allennlp.training.optimizers import Optimizer
+from allennlp.training import util as training_util
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 @TrainerBase.register("gan-base")
@@ -30,8 +36,9 @@ class GanTrainer(TrainerBase):
                  discriminator_optimizer: torch.optim.Optimizer,
                  batches_per_epoch: int,
                  num_epochs: int,
-                 batch_size: int) -> None:
-        super().__init__(serialization_dir, -1)
+                 batch_size: int,
+                 cuda_device: int) -> None:
+        super().__init__(serialization_dir, cuda_device)
         self.train_dataset = train_dataset
         self.noise = noise
         self.feature_extractor = feature_extractor
@@ -43,9 +50,19 @@ class GanTrainer(TrainerBase):
         self.train_iterator = train_iterator
         self.noise_iterator = noise_iterator
         self.batches_per_epoch = batches_per_epoch
+        self.num_epochs = num_epochs
         self.batch_size = batch_size
 
-    def train_one_epoch(self) -> Dict[str, float]:
+    def train_one_epoch(self, epoch: int) -> Dict[str, float]:
+
+        logger.info("Epoch %d/%d", epoch, self.num_epochs - 1)
+        peak_cpu_usage = peak_memory_mb()
+        logger.info(f"Peak CPU memory usage MB: {peak_cpu_usage}")
+        gpu_usage = []
+        for gpu, memory in gpu_memory_mb().items():
+            gpu_usage.append((gpu, memory))
+            logger.info(f"GPU {gpu} memory usage MB: {memory}")
+
         self.generator.train()
         self.discriminator.train()
 
@@ -65,16 +82,21 @@ class GanTrainer(TrainerBase):
             batch = next(train_iterator)
             noise = next(noise_iterator)
 
+            batch = nn_util.move_to_device(batch, self._cuda_devices[0])
+            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
+
             # extract features
             features = self.feature_extractor(batch)
 
             # Real example, want discriminator to predict 1.
-            real_error = self.discriminator(features, torch.ones(1))["loss"]
+            ones = nn_util.move_to_device(torch.ones((self.batch_size, 1)), self._cuda_devices[0])
+            real_error = self.discriminator(features, ones)["loss"]
             real_error.backward()
 
             # Fake example, want discriminator to predict 0.
             fake_data = self.generator(noise["array"])["output"]
-            fake_error = self.discriminator(fake_data, torch.zeros(1))["loss"]
+            zeros = nn_util.move_to_device(torch.zeros((self.batch_size, 1)), self._cuda_devices[0])
+            fake_error = self.discriminator(fake_data, zeros)["loss"]
             fake_error.backward()
 
             discriminator_real_loss += real_error.sum().item()
@@ -87,6 +109,8 @@ class GanTrainer(TrainerBase):
             self.generator_optimizer.zero_grad()
 
             noise = next(noise_iterator)
+            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
+
             generated = self.generator(noise["array"], self.discriminator)
             fake_data = generated["output"]
             fake_error = generated["loss"]
@@ -109,8 +133,8 @@ class GanTrainer(TrainerBase):
 
     def train(self) -> Dict[str, Any]:
         with tqdm.trange(self.num_epochs) as epochs:
-            for _ in epochs:
-                metrics = self.train_one_epoch()
+            for n_epoch in epochs:
+                metrics = self.train_one_epoch(n_epoch)
                 description = (f'gl: {metrics["generator_loss"]:.3f} '
                                f'dfl: {metrics["discriminator_fake_loss"]:.3f} '
                                f'drl: {metrics["discriminator_real_loss"]:.3f} '
@@ -129,6 +153,7 @@ class GanTrainer(TrainerBase):
         training_file = params.pop('training_file')
         dev_file = params.pop('dev_file')
         test_file = params.pop('test_file')
+        cuda_device = params.pop_int("cuda_device")
 
         # Data reader
         reader = DatasetReader.from_params(params.pop('data_reader'))
@@ -144,22 +169,28 @@ class GanTrainer(TrainerBase):
                                           only_include_pretrained_words=True,
                                           max_vocab_size=config_file.max_vocab_size,
                                           )
-        print('Vocab size: %s' % vocab.get_vocab_size())
+        logging.info('Vocab size: %s' % vocab.get_vocab_size())
 
         # Iterator
         train_iterator = DataIterator.from_params(params.pop("training_iterator"))
         train_iterator.index_with(vocab)
-
         noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
 
-        # Feature_extractor
+        # Model
         feature_extractor = Model.from_params(params.pop("feature_extractor"), vocab=vocab)
-
-        # Generator
         generator = Model.from_params(params.pop("generator"))
-
-        # Discriminator
         discriminator = Model.from_params(params.pop("discriminator"))
+
+        if isinstance(cuda_device, list):
+            model_device = cuda_device[0]
+        else:
+            model_device = cuda_device
+        if model_device >= 0:
+            # Moving model to GPU here so that the optimizer state gets constructed on
+            # the right device.
+            feature_extractor = feature_extractor.cuda(model_device)
+            generator = generator.cuda(model_device)
+            discriminator = discriminator.cuda(model_device)
 
         # Optimizer
         generator_optimizer = Optimizer.from_params(
@@ -170,9 +201,13 @@ class GanTrainer(TrainerBase):
             [[n, p] for n, p in discriminator.named_parameters() if p.requires_grad],
             params.pop("discriminator_optimizer"))
 
+        # training_util.move_optimizer_to_cuda(generator_optimizer)
+        # training_util.move_optimizer_to_cuda(discriminator_optimizer)
+
         num_epochs = params.pop_int("num_epochs")
         batches_per_epoch = params.pop_int("batches_per_epoch")
         batch_size = params.pop_int("batch_size")
+
         params.pop("trainer")
 
         params.assert_empty(__name__)
@@ -189,4 +224,5 @@ class GanTrainer(TrainerBase):
                    discriminator_optimizer,
                    batches_per_epoch,
                    num_epochs,
-                   batch_size)
+                   batch_size,
+                   cuda_device)
