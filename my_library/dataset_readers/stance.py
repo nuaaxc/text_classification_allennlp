@@ -7,8 +7,8 @@ from allennlp.data import Instance
 from allennlp.data.fields import TextField, LabelField, MetadataField
 
 from allennlp.data.dataset_readers import DatasetReader
-from allennlp.data.token_indexers import TokenIndexer
-from allennlp.data.tokenizers import Token
+from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
+from allennlp.data.tokenizers import Tokenizer, WordTokenizer
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class StanceDatasetReader(DatasetReader):
     def __init__(self,
                  lazy: bool = False,
-                 tokenizer: Callable[[str], List[str]] = lambda x: x.split(),
+                 tokenizer: Tokenizer = None,
                  token_indexers: Dict[str, TokenIndexer] = None) -> None:
         super().__init__(lazy=lazy)
-        self.tokenizer = tokenizer
-        self.token_indexers = token_indexers
+        self.tokenizer = tokenizer or WordTokenizer()
+        self.token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
 
     def _read(self, file_path: str) -> Iterator[Instance]:
         F = []
@@ -45,10 +45,10 @@ class StanceDatasetReader(DatasetReader):
                 label, text = random.choice(A)
             else:
                 label, text = random.choice(N)
-            yield self.text_to_instance([Token(x) for x in self.tokenizer(text)], label)
+            yield self.text_to_instance(text, label)
 
-    def text_to_instance(self, tokens: List[Token], label: str = None) -> Instance:  # type: ignore
-        fields = {'tokens': TextField(tokens, self.token_indexers)}
+    def text_to_instance(self, text: str, label: str = None) -> Instance:  # type: ignore
+        fields = {'text': TextField(self.tokenizer.tokenize(text), self.token_indexers)}
         if label is not None:
             fields['labels'] = LabelField(label)
         return Instance(fields)

@@ -50,19 +50,21 @@ class SamplingReader(DatasetReader):
     """
     A dataset reader that just samples from the provided sampler forever.
     """
-    def __init__(self, sampler: InputSampler) -> None:
+    def __init__(self,
+                 sampler: InputSampler,
+                 dim: int) -> None:
         super().__init__(lazy=True)
         self.sampler = sampler
+        self.dim = dim
 
     def _read(self, _: str) -> Iterable[Instance]:
         while True:
-            example = self.sampler.sample(1)
+            example = self.sampler.sample(self.dim)
             yield self.text_to_instance(example)
 
     def text_to_instance(self, example: np.ndarray) -> Instance:  # type: ignore
         # pylint: disable=arguments-differ
-        field = ArrayField(example)
-        return Instance({"array": field})
+        return Instance({"array": ArrayField(example)})
 
 
 def train_dev_split(train_raw_path,

@@ -14,34 +14,36 @@ from allennlp.models import Model
 from allennlp.training.trainer_base import TrainerBase
 from allennlp.training.optimizers import Optimizer
 
-from my_library.models.data_augmentation.feature_extractor import FeatureExtractor
-
 
 @TrainerBase.register("gan-base")
 class GanTrainer(TrainerBase):
     def __init__(self,
                  serialization_dir: str,
-                 data: Iterable[Instance],
+                 train_dataset: Iterable[Instance],
                  noise: Iterable[Instance],
+                 feature_extractor: Model,
                  generator: Model,
                  discriminator: Model,
-                 iterator: DataIterator,
+                 train_iterator: DataIterator,
                  noise_iterator: DataIterator,
                  generator_optimizer: torch.optim.Optimizer,
                  discriminator_optimizer: torch.optim.Optimizer,
                  batches_per_epoch: int,
-                 num_epochs: int) -> None:
-        super(GanTrainer).__init__(serialization_dir, -1)
-        self.data = data
+                 num_epochs: int,
+                 batch_size: int) -> None:
+        super().__init__(serialization_dir, -1)
+        self.train_dataset = train_dataset
         self.noise = noise
+        self.feature_extractor = feature_extractor
         self.generator = generator
         self.generator_optimizer = generator_optimizer
         self.discriminator = discriminator
         self.discriminator_optimizer = discriminator_optimizer
         self.num_epochs = num_epochs
-        self.iterator = iterator
+        self.train_iterator = train_iterator
         self.noise_iterator = noise_iterator
         self.batches_per_epoch = batches_per_epoch
+        self.batch_size = batch_size
 
     def train_one_epoch(self) -> Dict[str, float]:
         self.generator.train()
@@ -54,17 +56,20 @@ class GanTrainer(TrainerBase):
         fake_stdev = 0.0
 
         # First train the discriminator
-        data_iterator = self.iterator(self.data)
+        train_iterator = self.train_iterator(self.train_dataset)
         noise_iterator = self.noise_iterator(self.noise)
 
         for _ in range(self.batches_per_epoch):
             self.discriminator_optimizer.zero_grad()
 
-            batch = next(data_iterator)
+            batch = next(train_iterator)
             noise = next(noise_iterator)
 
+            # extract features
+            features = self.feature_extractor(batch)
+
             # Real example, want discriminator to predict 1.
-            real_error = self.discriminator(batch["array"], torch.ones(1))["loss"]
+            real_error = self.discriminator(features, torch.ones(1))["loss"]
             real_error.backward()
 
             # Fake example, want discriminator to predict 0.
@@ -121,7 +126,6 @@ class GanTrainer(TrainerBase):
                     recover: bool = False) -> 'GanTrainer':
 
         config_file = params.pop('config_file')
-        stance_target = params.pop('stance_target')
         training_file = params.pop('training_file')
         dev_file = params.pop('dev_file')
         test_file = params.pop('test_file')
@@ -139,26 +143,25 @@ class GanTrainer(TrainerBase):
                                           # min_count={'tokens': 2},
                                           only_include_pretrained_words=True,
                                           max_vocab_size=config_file.max_vocab_size,
-                                          pretrained_files={'tokens': config_file.GLOVE_TWITTER_27B_200D},
                                           )
         print('Vocab size: %s' % vocab.get_vocab_size())
 
         # Iterator
-        training_iterator = DataIterator.from_params(params.pop("training_iterator"))
-        training_iterator.index_with(vocab)
+        train_iterator = DataIterator.from_params(params.pop("training_iterator"))
+        train_iterator.index_with(vocab)
 
         noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
 
         # Feature_extractor
-        feature_extractor = FeatureExtractor.from_params(params.pop("feature_extractor"))
+        feature_extractor = Model.from_params(params.pop("feature_extractor"), vocab=vocab)
 
-        exit()
         # Generator
         generator = Model.from_params(params.pop("generator"))
+
+        # Discriminator
         discriminator = Model.from_params(params.pop("discriminator"))
 
-
-
+        # Optimizer
         generator_optimizer = Optimizer.from_params(
             [[n, p] for n, p in generator.named_parameters() if p.requires_grad],
             params.pop("generator_optimizer"))
@@ -169,18 +172,21 @@ class GanTrainer(TrainerBase):
 
         num_epochs = params.pop_int("num_epochs")
         batches_per_epoch = params.pop_int("batches_per_epoch")
+        batch_size = params.pop_int("batch_size")
         params.pop("trainer")
 
         params.assert_empty(__name__)
 
         return cls(serialization_dir,
-                   data,
+                   train_dataset,
                    noise,
+                   feature_extractor,
                    generator,
                    discriminator,
-                   iterator,
+                   train_iterator,
                    noise_iterator,
                    generator_optimizer,
                    discriminator_optimizer,
                    batches_per_epoch,
-                   num_epochs)
+                   num_epochs,
+                   batch_size)
