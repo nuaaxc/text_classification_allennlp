@@ -3,6 +3,7 @@ import logging
 import tqdm
 import torch
 import numpy as np
+from itertools import chain
 
 from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
@@ -198,7 +199,7 @@ class GanTrainer(TrainerBase):
             params.pop("generator_optimizer"))
 
         discriminator_optimizer = Optimizer.from_params(
-            [[n, p] for n, p in discriminator.named_parameters() if p.requires_grad],
+            [[n, p] for n, p in chain(discriminator.named_parameters(), feature_extractor.named_parameters()) if p.requires_grad],
             params.pop("discriminator_optimizer"))
 
         # training_util.move_optimizer_to_cuda(generator_optimizer)
