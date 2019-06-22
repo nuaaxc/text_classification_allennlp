@@ -16,7 +16,7 @@ class FeatureExtractor(Model):
                  text_encoder: Seq2VecEncoder,
                  feed_forward: FeedForward,
                  ) -> None:
-        super(FeatureExtractor, self).__init__(vocab)
+        super().__init__(vocab)
 
         self.text_field_embedder = text_field_embedder
         self.text_encoder = text_encoder

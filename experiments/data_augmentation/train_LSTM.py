@@ -1,25 +1,13 @@
 import logging
-import numpy as np
 import random
-import os
-import shutil
 
 import torch
-import torch.optim as optim
-import torch.nn.functional as F
 
-from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
-from allennlp.data.token_indexers import PretrainedBertIndexer, SingleIdTokenIndexer
-from allennlp.data.vocabulary import Vocabulary
-from allennlp.modules.text_field_embedders import TextFieldEmbedder, BasicTextFieldEmbedder
-from allennlp.modules.token_embedders import Embedding
-from allennlp.data.iterators import BucketIterator
 from allennlp.training.trainer import Trainer, TrainerBase
-from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
 
-from my_library.models import FeatureExtractor, Generator
-from my_library.dataset_readers.stance import StanceDatasetReader
+from my_library.models.data_augmentation import FeatureExtractor
+
 from config import StanceConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -40,6 +28,14 @@ def experiment_stance():
                                                     'dropout', str(hparam['dropout']),
                                                     'frac', str(hparam['file_frac'])])
 
+    batch_size = config_file.hparam[stance_target]['batch_size']
+    lr = config_file.hparam[stance_target]['lr']
+    d_word_emb = config_file.hparam[stance_target]['d_word_emb']
+    d_hidden = config_file.hparam[stance_target]['d_hidden']
+    d_rnn = config_file.hparam[stance_target]['d_rnn']
+    dropout = config_file.hparam[stance_target]['dropout']
+    cuda_device = config_file.hparam[stance_target]['cuda_device']
+
     params_ = Params(
         {
             "config_file": config_file,
@@ -57,19 +53,19 @@ def experiment_stance():
             "noise_reader": {
                 "type": "sampling",
                 "sampler": {"type": "uniform"},
-                "dim": config_file.hparam[stance_target]['d_hidden']
+                "dim": d_hidden
             },
 
             # Iterators
             "training_iterator": {
                 "type": "bucket",
-                "batch_size": config_file.hparam[stance_target]['batch_size'],
+                "batch_size": batch_size,
                 "sorting_keys": [('text', 'num_tokens')],
                 "track_epoch": False
             },
             "noise_iterator": {
                 "type": "basic",
-                "batch_size": config_file.hparam[stance_target]['batch_size']
+                "batch_size": batch_size
             },
 
             # Modules
@@ -80,52 +76,76 @@ def experiment_stance():
                         "type": "embedding",
                         # "pretrained_file": config_file.GLOVE_TWITTER_27B_200D,
                         "pretrained_file": config_file.GLOVE_840B_300D,
-                        "embedding_dim": config_file.hparam[stance_target]['d_word_emb'],
+                        "embedding_dim": d_word_emb,
                         "trainable": False
                     },
                 },
                 "text_encoder": {
                     "type": "lstm",
-                    "input_size": config_file.hparam[stance_target]['d_word_emb'],
-                    "hidden_size": config_file.hparam[stance_target]['d_rnn'],
-                    "num_layers": 2,
+                    "input_size": d_word_emb,
+                    "hidden_size": d_rnn,
+                    "num_layers": 1,
                     "batch_first": True,
-                    "dropout": config_file.hparam[stance_target]['dropout'],
+                    "dropout": dropout,
                     "bidirectional": True,
                 },
                 "feed_forward": {
-                    "input_dim": 2 * config_file.hparam[stance_target]['d_rnn'],
+                    "input_dim": 2 * d_rnn,
                     "num_layers": 2,
-                    "hidden_dims": config_file.hparam[stance_target]['d_hidden'],
+                    "hidden_dims": d_hidden,
                     "activations": "relu",
-                    "dropout": config_file.hparam[stance_target]['dropout']
+                    "dropout": dropout
                 },
             },
             "generator": {
                 "type": "generator-base",
                 "feed_forward": {
-                    "input_dim": config_file.hparam[stance_target]['d_hidden'],
+                    "input_dim": d_hidden,
                     "num_layers": 2,
-                    "hidden_dims": config_file.hparam[stance_target]['d_hidden'],
+                    "hidden_dims": d_hidden,
                     "activations": "relu",
-                    "dropout": config_file.hparam[stance_target]['dropout']
+                    "dropout": dropout
                 },
             },
             "discriminator": {
                 "type": "discriminator-base",
-                "d_input": config_file.hparam[stance_target]['d_hidden'],
-                "d_hidden": config_file.hparam[stance_target]['d_hidden'],
-                "n_layers": 2,
-                "dropout": config_file.hparam[stance_target]['dropout'],
-                'activation': 'relu',
-                "preprocessing": None,
+                "feed_forward": {
+                    "input_dim": d_hidden,
+                    "num_layers": 2,
+                    "hidden_dims": [d_hidden, 1],
+                    "activations": "relu",
+                    "dropout": dropout
+                },
             },
-            "generator_optimizer": {"type": "adam", "lr": 0.001},
-            "discriminator_optimizer": {"type": "adam", "lr": 0.001},
+            "classifier": {
+                "type": "classifier-base",
+                "feed_forward": {
+                    "input_dim": d_hidden,
+                    "num_layers": 2,
+                    "hidden_dims": [d_hidden, 3],
+                    "activations": "relu",
+                    "dropout": dropout
+                },
+            },
+            "optimizer": {
+                "type": "gan",
+                "generator_optimizer": {
+                    "type": "adam",
+                    "lr": lr
+                },
+                "discriminator_optimizer": {
+                    "type": "adam",
+                    "lr": lr
+                },
+                "classifier_optimizer": {
+                    "type": "adam",
+                    "lr": lr
+                }
+            },
             "num_epochs": 100,
             "batches_per_epoch": 100,
-            "batch_size": config_file.hparam[stance_target]['batch_size'],
-            "cuda_device": config_file.hparam[stance_target]['cuda_device'],
+            "batch_size": batch_size,
+            "cuda_device": cuda_device,
         })
 
     import tempfile
