@@ -68,3 +68,4 @@ class GanOptimizer(torch.optim.Optimizer):
         return cls(generator_optimizer=generator_optimizer,
                    discriminator_optimizer=discriminator_optimizer,
                    classifier_optimizer=classifier_optimizer)
+
