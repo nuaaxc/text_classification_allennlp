@@ -66,8 +66,7 @@ class GanTrainer(TrainerBase):
             gpu_usage.append((gpu, memory))
             logger.info(f"GPU {gpu} memory usage MB: {memory}")
 
-        self.generator.train()
-        self.discriminator.train()
+        self.model.train()
 
         generator_loss = 0.0
         discriminator_real_loss = 0.0
@@ -76,45 +75,48 @@ class GanTrainer(TrainerBase):
         fake_stdev = 0.0
 
         # First train the discriminator
-        train_iterator = self.train_iterator(self.train_dataset)
-        noise_iterator = self.noise_iterator(self.noise)
+        self.optimizer.stage = 'discriminator'
+
+        data_iterator = self.data_iterator(self.train_dataset)
+        noise_iterator = self.noise_iterator(self.noise_dataset)
 
         for _ in range(self.batches_per_epoch):
-            self.discriminator_optimizer.zero_grad()
+            self.optimizer.zero_grad()
 
-            batch = next(train_iterator)
+            batch = next(data_iterator)
             noise = next(noise_iterator)
 
             batch = nn_util.move_to_device(batch, self._cuda_devices[0])
             noise = nn_util.move_to_device(noise, self._cuda_devices[0])
 
             # extract features
-            features = self.feature_extractor(batch)
+            features = self.model.feature_extractor(batch['text'])
 
             # Real example, want discriminator to predict 1.
             ones = nn_util.move_to_device(torch.ones((self.batch_size, 1)), self._cuda_devices[0])
-            real_error = self.discriminator(features, ones)["loss"]
+            real_error = self.model.discriminator(features, ones)["loss"]
             real_error.backward()
 
             # Fake example, want discriminator to predict 0.
-            fake_data = self.generator(noise["array"])["output"]
+            fake_data = self.model.generator(noise["array"])["output"]
             zeros = nn_util.move_to_device(torch.zeros((self.batch_size, 1)), self._cuda_devices[0])
-            fake_error = self.discriminator(fake_data, zeros)["loss"]
+            fake_error = self.model.discriminator(fake_data, zeros)["loss"]
             fake_error.backward()
 
-            discriminator_real_loss += real_error.sum().item()
-            discriminator_fake_loss += fake_error.sum().item()
+            discriminator_real_loss += real_error.mean().item()
+            discriminator_fake_loss += fake_error.mean().item()
 
-            self.discriminator_optimizer.step()
+            self.optimizer.step()
 
-        # Now train the generator
+        # Then, train the generator
+        self.optimizer.stage = 'generator'
         for _ in range(self.batches_per_epoch):
-            self.generator_optimizer.zero_grad()
+            self.optimizer.zero_grad()
 
             noise = next(noise_iterator)
             noise = nn_util.move_to_device(noise, self._cuda_devices[0])
 
-            generated = self.generator(noise["array"], self.discriminator)
+            generated = self.model.generator(noise["array"], self.model.discriminator)
             fake_data = generated["output"]
             fake_error = generated["loss"]
             fake_error.backward()
@@ -122,9 +124,9 @@ class GanTrainer(TrainerBase):
             fake_mean += fake_data.mean()
             fake_stdev += fake_data.std()
 
-            generator_loss += fake_error.sum().item()
+            generator_loss += fake_error.mean().item()
 
-            self.generator_optimizer.step()
+            self.optimizer.step()
 
         return {
             "generator_loss": generator_loss,

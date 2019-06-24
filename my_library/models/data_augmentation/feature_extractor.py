@@ -22,11 +22,10 @@ class FeatureExtractor(Model):
         self.text_encoder = text_encoder
         self.feed_forward = feed_forward
 
-    def forward(self, inputs: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        text = inputs['text']
+    def forward(self, text: Dict[str, Any]) -> Dict[str, torch.Tensor]:
         mask = get_text_field_mask(text)
-        text = self.text_field_embedder(text)
-        text = self.text_encoder(text, mask)
-        output = self.feed_forward(text)
+        embeddig = self.text_field_embedder(text)
+        encoding = self.text_encoder(embeddig, mask)
+        output = self.feed_forward(encoding)
         return output
 
