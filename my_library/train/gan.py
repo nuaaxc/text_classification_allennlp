@@ -1,10 +1,14 @@
-from typing import Dict, Iterable, Any
+from typing import Dict, Iterable, Any, Tuple
 import logging
-import tqdm
-import torch
+import math
+import time
+import datetime
 import numpy as np
 from itertools import chain
 
+import torch
+
+from allennlp.common.tqdm import Tqdm
 from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
 from allennlp.common.util import (dump_metrics, gpu_memory_mb, peak_memory_mb,
@@ -16,6 +20,8 @@ from allennlp.data.iterators import DataIterator
 from allennlp.models import Model
 from allennlp.nn import util as nn_util
 from allennlp.training.trainer_base import TrainerBase
+from allennlp.training.metric_tracker import MetricTracker
+from allennlp.training.checkpointer import Checkpointer
 from allennlp.training.optimizers import Optimizer
 from allennlp.training import util as training_util
 
@@ -28,37 +34,50 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 @TrainerBase.register("gan-base")
 class GanTrainer(TrainerBase):
     def __init__(self,
-                 serialization_dir: str,
-                 train_dataset: Iterable[Instance],
-                 noise_dataset: Iterable[Instance],
-                 data_iterator: DataIterator,
-                 noise_iterator: DataIterator,
                  model: Gan,
                  optimizer: GanOptimizer,
-                 batches_per_epoch: int,
-                 num_epochs: int,
-                 batch_size: int,
-                 cuda_device: int) -> None:
+                 train_dataset: Iterable[Instance],
+                 noise_dataset: Iterable[Instance] = None,
+                 data_iterator: DataIterator = None,
+                 noise_iterator: DataIterator = None,
+                 validation_dataset: Iterable[Instance] = None,
+                 validation_metric: str = "-loss",
+                 serialization_dir: str = None,
+                 num_epochs: int = 20,
+                 batch_size: int = 16,
+                 cuda_device: int = 0,
+                 patience: int = 5,
+                 num_serialized_models_to_keep: int = 1,
+                 keep_serialized_model_every_num_seconds: int = None,
+                 ) -> None:
         super().__init__(serialization_dir, cuda_device)
+
+        self.model = model
+
+        self.optimizer = optimizer
+
         self.train_dataset = train_dataset
         self.noise_dataset = noise_dataset
 
         self.data_iterator = data_iterator
         self.noise_iterator = noise_iterator
 
-        self.model = model
+        self._validation_dataset = validation_dataset
 
-        self.optimizer = optimizer
+        self._num_epochs = num_epochs
+        self._batch_size = batch_size
 
-        self.num_epochs = num_epochs
+        self._metric_tracker = MetricTracker(patience, validation_metric)
+        self._validation_metric = validation_metric[1:]
 
-        self.batches_per_epoch = batches_per_epoch
-        self.num_epochs = num_epochs
-        self.batch_size = batch_size
+        self._checkpointer = Checkpointer(serialization_dir,
+                                          keep_serialized_model_every_num_seconds,
+                                          num_serialized_models_to_keep)
+        self._batch_num_total = 0
 
     def train_one_epoch(self, epoch: int) -> Dict[str, float]:
 
-        logger.info("Epoch %d/%d", epoch, self.num_epochs - 1)
+        logger.info("Epoch %d/%d", epoch, self._num_epochs - 1)
         peak_cpu_usage = peak_memory_mb()
         logger.info(f"Peak CPU memory usage MB: {peak_cpu_usage}")
         gpu_usage = []
@@ -74,13 +93,13 @@ class GanTrainer(TrainerBase):
         fake_mean = 0.0
         fake_stdev = 0.0
 
-        # First train the discriminator
+        # (1/3) First train the discriminator
         self.optimizer.stage = 'discriminator'
 
         data_iterator = self.data_iterator(self.train_dataset)
         noise_iterator = self.noise_iterator(self.noise_dataset)
 
-        for _ in range(self.batches_per_epoch):
+        for _ in range(10):
             self.optimizer.zero_grad()
 
             batch = next(data_iterator)
@@ -93,13 +112,13 @@ class GanTrainer(TrainerBase):
             features = self.model.feature_extractor(batch['text'])
 
             # Real example, want discriminator to predict 1.
-            ones = nn_util.move_to_device(torch.ones((self.batch_size, 1)), self._cuda_devices[0])
+            ones = nn_util.move_to_device(torch.ones((self._batch_size, 1)), self._cuda_devices[0])
             real_error = self.model.discriminator(features, ones)["loss"]
             real_error.backward()
 
             # Fake example, want discriminator to predict 0.
             fake_data = self.model.generator(noise["array"])["output"]
-            zeros = nn_util.move_to_device(torch.zeros((self.batch_size, 1)), self._cuda_devices[0])
+            zeros = nn_util.move_to_device(torch.zeros((self._batch_size, 1)), self._cuda_devices[0])
             fake_error = self.model.discriminator(fake_data, zeros)["loss"]
             fake_error.backward()
 
@@ -108,9 +127,9 @@ class GanTrainer(TrainerBase):
 
             self.optimizer.step()
 
-        # Then, train the generator
+        # (2/3) Then, train the generator
         self.optimizer.stage = 'generator'
-        for _ in range(self.batches_per_epoch):
+        for _ in range(10):
             self.optimizer.zero_grad()
 
             noise = next(noise_iterator)
@@ -128,25 +147,90 @@ class GanTrainer(TrainerBase):
 
             self.optimizer.step()
 
+        # (3/3) Finally, train the classifier
+        self.optimizer.stage = 'classifier'
+        for _ in range(10):
+            self.optimizer.zero_grad()
+
         return {
             "generator_loss": generator_loss,
             "discriminator_fake_loss": discriminator_fake_loss,
             "discriminator_real_loss": discriminator_real_loss,
-            "mean": fake_mean / self.batches_per_epoch,
-            "stdev": fake_stdev / self.batches_per_epoch
+            "mean": fake_mean / 100,
+            "stdev": fake_stdev / 100
         }
 
     def train(self) -> Dict[str, Any]:
-        with tqdm.trange(self.num_epochs) as epochs:
-            for n_epoch in epochs:
-                metrics = self.train_one_epoch(n_epoch)
-                description = (f'gl: {metrics["generator_loss"]:.3f} '
-                               f'dfl: {metrics["discriminator_fake_loss"]:.3f} '
-                               f'drl: {metrics["discriminator_real_loss"]:.3f} '
-                               f'mean: {metrics["mean"]:.2f} '
-                               f'std: {metrics["stdev"]:.2f} ')
-                epochs.set_description(description)
+
+        logger.info("Beginning training.")
+
+        train_metrics: Dict[str, float] = {}
+        val_metrics: Dict[str, float] = {}
+        this_epoch_val_metric: float = None
+        metrics: Dict[str, Any] = {}
+        epochs_trained = 0
+        training_start_time = time.time()
+
+        metrics['best_epoch'] = self._metric_tracker.best_epoch
+        for key, value in self._metric_tracker.best_epoch_metrics.items():
+            metrics["best_validation_" + key] = value
+
+        # train over epochs
+        for epoch in range(self._num_epochs):
+            epoch_start_time = time.time()
+
+            # train over one epoch
+            train_metrics = self.train_one_epoch(epoch)
+
+            # get peak of memory usage
+            if 'cpu_memory_MB' in train_metrics:
+                metrics['peak_cpu_memory_MB'] = max(metrics.get('peak_cpu_memory_MB', 0),
+                                                    train_metrics['cpu_memory_MB'])
+            for key, value in train_metrics.items():
+                if key.startswith('gpu_'):
+                    metrics["peak_" + key] = max(metrics.get("peak_" + key, 0), value)
+
+            # Validation
+            if self._validation_dataset is not None:
+                with torch.no_grad():
+                    # We have a validation set, so compute all the metrics on it.
+                    val_loss, num_batches = self._validation_loss()
+                    val_metrics = training_util.get_metrics(self.model, val_loss, num_batches, reset=True)
+
+                    # Check validation metric for early stopping
+                    this_epoch_val_metric = val_metrics[self._validation_metric]
+                    self._metric_tracker.add_metric(this_epoch_val_metric)
+
+                    if self._metric_tracker.should_stop_early():
+                        logger.info("Ran out of patience.  Stopping training.")
+                        break
+
+            description = (f'gl: {metrics["generator_loss"]:.3f} '
+                           f'dfl: {metrics["discriminator_fake_loss"]:.3f} '
+                           f'drl: {metrics["discriminator_real_loss"]:.3f} '
+                           f'mean: {metrics["mean"]:.2f} '
+                           f'std: {metrics["stdev"]:.2f} ')
         return metrics
+
+    def _validation_loss(self) -> Tuple[float, int]:
+        """
+        Computes the validation loss. Returns it and the number of batches.
+        """
+        logger.info("Validating")
+        self.model.eval()
+
+        val_iterator = self.data_iterator(self._validation_dataset, num_epochs=1, shuffle=False)
+        val_iterator = lazy_groups_of(val_iterator, 1)
+        num_validation_batches = math.ceil(self.data_iterator.get_num_batches(self._validation_dataset))
+
+        batches_this_epoch = 0
+        val_loss = 0
+
+        for batch in Tqdm.tqdm(val_iterator, total=num_validation_batches):
+            pass
+
+        return val_loss, batches_this_epoch
+
 
     @classmethod
     def from_params(cls,  # type: ignore
@@ -161,9 +245,10 @@ class GanTrainer(TrainerBase):
         cuda_device = params.pop_int("cuda_device")
 
         # Data reader
-        reader = DatasetReader.from_params(params.pop('data_reader'))
-        train_dataset = reader.read(cached_path(training_file))
-        validation_dataset = reader.read(cached_path(dev_file))
+        train_reader = DatasetReader.from_params(params.pop('train_reader'))
+        val_reader = DatasetReader.from_params(params.pop("val_reader"))
+        train_dataset = train_reader.read(cached_path(training_file))
+        validation_dataset = val_reader.read(cached_path(dev_file))
 
         noise_reader = DatasetReader.from_params(params.pop("noise_reader"))
         noise_dataset = noise_reader.read("")
@@ -217,21 +302,22 @@ class GanTrainer(TrainerBase):
         # training_util.move_optimizer_to_cuda(discriminator_optimizer)
 
         num_epochs = params.pop_int("num_epochs")
-        batches_per_epoch = params.pop_int("batches_per_epoch")
         batch_size = params.pop_int("batch_size")
+        patience = params.pop_int("patience")
 
         params.pop("trainer")
 
         params.assert_empty(__name__)
 
-        return cls(serialization_dir=serialization_dir,
+        return cls(model=model,
+                   optimizer=optimizer,
                    train_dataset=train_dataset,
                    noise_dataset=noise_dataset,
                    data_iterator=data_iterator,
                    noise_iterator=noise_iterator,
-                   model=model,
-                   optimizer=optimizer,
-                   batches_per_epoch=batches_per_epoch,
+                   validation_dataset=validation_dataset,
+                   serialization_dir=serialization_dir,
                    num_epochs=num_epochs,
                    batch_size=batch_size,
-                   cuda_device=cuda_device)
+                   cuda_device=cuda_device,
+                   patience=patience)

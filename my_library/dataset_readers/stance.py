@@ -19,12 +19,14 @@ class StanceDatasetReader(DatasetReader):
     def __init__(self,
                  lazy: bool = False,
                  tokenizer: Tokenizer = None,
-                 token_indexers: Dict[str, TokenIndexer] = None) -> None:
+                 token_indexers: Dict[str, TokenIndexer] = None,
+                 is_train: bool = True) -> None:
         super().__init__(lazy=lazy)
         self.tokenizer = tokenizer or WordTokenizer()
         self.token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
+        self._is_train = is_train
 
-    def _read(self, file_path: str) -> Iterator[Instance]:
+    def _read_train(self, file_path: str) -> Iterator[Instance]:
         F = []
         A = []
         N = []
@@ -37,6 +39,7 @@ class StanceDatasetReader(DatasetReader):
                     A.append((label, text))
                 else:
                     N.append((label, text))
+
         for _ in range(0, 10000):
             choice: float = random.random()
             if choice < 0.333:
@@ -46,6 +49,18 @@ class StanceDatasetReader(DatasetReader):
             else:
                 label, text = random.choice(N)
             yield self.text_to_instance(text, label)
+
+    def _read_val(self, file_path: str) -> Iterator[Instance]:
+        with open(file_path, encoding='utf-8') as f:
+            for line in f:
+                label, text = line.strip().split('\t')
+                yield self.text_to_instance(text, label)
+
+    def _read(self, file_path: str) -> Iterator[Instance]:
+        if self._is_train:
+            return self._read_train(file_path)
+        else:
+            return self._read_val(file_path)
 
     def text_to_instance(self, text: str, label: str = None) -> Instance:  # type: ignore
         fields = {'text': TextField(self.tokenizer.tokenize(text), self.token_indexers)}

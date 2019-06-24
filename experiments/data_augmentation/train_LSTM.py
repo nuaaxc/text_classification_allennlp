@@ -35,6 +35,7 @@ def experiment_stance():
     d_rnn = config_file.hparam[stance_target]['d_rnn']
     dropout = config_file.hparam[stance_target]['dropout']
     cuda_device = config_file.hparam[stance_target]['cuda_device']
+    patience = config_file.hparam[stance_target]['patience']
 
     params_ = Params(
         {
@@ -47,9 +48,14 @@ def experiment_stance():
             },
 
             # Readers
-            "data_reader": {"type": "stance",
-                            "lazy": True
-                            },
+            "train_reader": {"type": "stance",
+                             "lazy": True,
+                             "is_train": True,
+                             },
+            "val_reader": {"type": "stance",
+                           "lazy": False,
+                           "is_train": False,
+                           },
             "noise_reader": {
                 "type": "sampling",
                 "sampler": {"type": "uniform"},
@@ -143,9 +149,10 @@ def experiment_stance():
                 }
             },
             "num_epochs": 100,
-            "batches_per_epoch": 100,
+            # "batches_per_epoch": 100,
             "batch_size": batch_size,
             "cuda_device": cuda_device,
+            "patience": patience,
         })
 
     import tempfile
