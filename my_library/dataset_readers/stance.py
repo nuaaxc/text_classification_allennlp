@@ -40,7 +40,7 @@ class StanceDatasetReader(DatasetReader):
                 else:
                     N.append((label, text))
 
-        for _ in range(0, 10000):
+        while True:
             choice: float = random.random()
             if choice < 0.333:
                 label, text = random.choice(F)

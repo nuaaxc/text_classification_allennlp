@@ -1,6 +1,6 @@
 import logging
 import random
-
+from pprint import pprint
 import torch
 
 from allennlp.common.params import Params
@@ -48,6 +48,10 @@ def experiment_stance():
             },
 
             # Readers
+            "vocab_reader": {"type": "stance",
+                             "lazy": False,
+                             "is_train": False,
+                             },
             "train_reader": {"type": "stance",
                              "lazy": True,
                              "is_train": True,
@@ -153,13 +157,16 @@ def experiment_stance():
             "batch_size": batch_size,
             "cuda_device": cuda_device,
             "patience": patience,
+            "num_loop_discriminator": 10,
+            "num_loop_generator": 10,
+            "num_loop_classifier": 100,
         })
 
     import tempfile
     serialization_dir_ = tempfile.mkdtemp()
     trainer_ = TrainerBase.from_params(params_, serialization_dir_)
     metrics_ = trainer_.train()
-    print(metrics_)
+    pprint(metrics_)
 
 
 if __name__ == '__main__':
