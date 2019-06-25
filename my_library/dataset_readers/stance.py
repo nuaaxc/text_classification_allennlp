@@ -44,7 +44,7 @@ class StanceDatasetReader(DatasetReader):
             choice: float = random.random()
             if choice < 0.333:
                 label, text = random.choice(F)
-            elif choice >= 0.333:
+            elif choice >= 0.666:
                 label, text = random.choice(A)
             else:
                 label, text = random.choice(N)
@@ -65,7 +65,7 @@ class StanceDatasetReader(DatasetReader):
     def text_to_instance(self, text: str, label: str = None) -> Instance:  # type: ignore
         fields = {'text': TextField(self.tokenizer.tokenize(text), self.token_indexers)}
         if label is not None:
-            fields['labels'] = LabelField(label)
+            fields['label'] = LabelField(label)
         return Instance(fields)
 
 

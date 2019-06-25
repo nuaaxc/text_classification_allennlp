@@ -87,6 +87,7 @@ class GanTrainer(TrainerBase):
 
         self.model.train()
 
+        cls_loss = 0.
         generator_loss = 0.0
         discriminator_real_loss = 0.0
         discriminator_fake_loss = 0.0
@@ -149,10 +150,23 @@ class GanTrainer(TrainerBase):
 
         # (3/3) Finally, train the classifier
         self.optimizer.stage = 'classifier'
+        data_iterator = self.data_iterator(self.train_dataset)
         for _ in range(10):
             self.optimizer.zero_grad()
 
+            batch = next(data_iterator)
+            batch = nn_util.move_to_device(batch, self._cuda_devices[0])
+
+            features = self.model.feature_extractor(batch['text'])
+            cls_error = self.model.classifier(features, batch['label'])['loss']
+            cls_error.backward()
+
+            cls_loss += cls_error.mean().item()
+
+            self.optimizer.step()
+
         return {
+            "cls_loss": cls_loss,
             "generator_loss": generator_loss,
             "discriminator_fake_loss": discriminator_fake_loss,
             "discriminator_real_loss": discriminator_real_loss,
@@ -205,11 +219,17 @@ class GanTrainer(TrainerBase):
                         logger.info("Ran out of patience.  Stopping training.")
                         break
 
-            description = (f'gl: {metrics["generator_loss"]:.3f} '
-                           f'dfl: {metrics["discriminator_fake_loss"]:.3f} '
-                           f'drl: {metrics["discriminator_real_loss"]:.3f} '
-                           f'mean: {metrics["mean"]:.2f} '
-                           f'std: {metrics["stdev"]:.2f} ')
+            # Create overall metrics dict
+            training_elapsed_time = time.time() - training_start_time
+            metrics["training_duration"] = str(datetime.timedelta(seconds=training_elapsed_time))
+            metrics["training_epochs"] = epochs_trained
+            metrics["epoch"] = epoch
+
+            for key, value in train_metrics.items():
+                metrics["training_" + key] = value
+            for key, value in val_metrics.items():
+                metrics["validation_" + key] = value
+
         return metrics
 
     def _validation_loss(self) -> Tuple[float, int]:
@@ -222,15 +242,26 @@ class GanTrainer(TrainerBase):
         val_iterator = self.data_iterator(self._validation_dataset, num_epochs=1, shuffle=False)
         val_iterator = lazy_groups_of(val_iterator, 1)
         num_validation_batches = math.ceil(self.data_iterator.get_num_batches(self._validation_dataset))
+        val_generator_tqdm = Tqdm.tqdm(val_iterator, total=num_validation_batches)
 
         batches_this_epoch = 0
         val_loss = 0
 
-        for batch in Tqdm.tqdm(val_iterator, total=num_validation_batches):
-            pass
+        for batch in val_generator_tqdm:
+            batch = batch[0]
+            batch = nn_util.move_to_device(batch, self._cuda_devices[0])
+            features = self.model.feature_extractor(batch['text'])
+            cls_error = self.model.classifier(features, batch['label'])['loss']
+
+            batches_this_epoch += 1
+            val_loss += cls_error.mean().item()
+
+        # Update the description with the latest metrics
+        val_metrics = training_util.get_metrics(self.model, val_loss, batches_this_epoch)
+        description = training_util.description_from_metrics(val_metrics)
+        val_generator_tqdm.set_description(description, refresh=False)
 
         return val_loss, batches_this_epoch
-
 
     @classmethod
     def from_params(cls,  # type: ignore
