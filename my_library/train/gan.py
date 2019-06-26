@@ -356,7 +356,9 @@ class GanTrainer(TrainerBase):
             val_loss += cls_error.mean().item()
 
             # Update the description with the latest metrics
-            val_metrics = training_util.get_metrics(self.model, val_loss, batches_this_epoch)
+            val_metrics = training_util.get_metrics(self.model.classifier, val_loss, batches_this_epoch)
+            print(val_metrics)
+            exit()
             description = training_util.description_from_metrics(val_metrics)
             val_generator_tqdm.set_description(description, refresh=False)
 
@@ -426,6 +428,8 @@ class GanTrainer(TrainerBase):
                                           max_vocab_size=config_file.max_vocab_size,
                                           )
         logging.info('Vocab size: %s' % vocab.get_vocab_size())
+        # vocab.print_statistics()
+        # print(vocab.get_token_to_index_vocabulary('labels'))
 
         # Iterator
         data_iterator = DataIterator.from_params(params.pop("training_iterator"))

@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from allennlp.modules import FeedForward
 from allennlp.models.model import Model
+from allennlp.training.metrics import CategoricalAccuracy, FBetaMeasure
 
 
 @Model.register("classifier-base")
@@ -18,6 +19,10 @@ class Classifier(Model):
         super().__init__(None)
         self.feed_forward = feed_forward
         self.loss = torch.nn.CrossEntropyLoss()
+        self.metrics = {
+            "accuracy": CategoricalAccuracy(),
+            "f1": FBetaMeasure()
+        }
 
     def forward(self,  # type: ignore
                 inputs: torch.Tensor,
@@ -28,5 +33,11 @@ class Classifier(Model):
         output_dict = {"output": output}
         if labels is not None:
             output_dict["loss"] = self.loss(output, labels)
+            for metric in self.metrics.values():
+                metric(output, labels.squeeze(-1))
 
         return output_dict
+
+    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        return {metric_name: metric.get_metric(reset)
+                for metric_name, metric in self.metrics.items()}
