@@ -1,5 +1,7 @@
 from typing import Dict
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 
@@ -14,6 +16,7 @@ class Classifier(Model):
     A model that takes a sample (input_dim,) and tries to predict 1
     if it's from the true distribution and 0 if it's from the generator.
     """
+
     def __init__(self,
                  feed_forward: FeedForward) -> None:
         super().__init__(None)
@@ -39,5 +42,10 @@ class Classifier(Model):
         return output_dict
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        return {metric_name: metric.get_metric(reset)
-                for metric_name, metric in self.metrics.items()}
+        metrics = {metric_name: metric.get_metric(reset)
+                   for metric_name, metric in self.metrics.items()}
+        fscore = metrics['f1']['fscore']
+        metrics['f1_fa'] = 0.5 * (fscore[0] + fscore[2])
+        metrics['f1_fan'] = np.mean(fscore)
+        del metrics['f1']
+        return metrics

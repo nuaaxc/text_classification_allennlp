@@ -42,6 +42,7 @@ class GanTrainer(TrainerBase):
                  data_iterator: DataIterator = None,
                  noise_iterator: DataIterator = None,
                  validation_dataset: Iterable[Instance] = None,
+                 test_dataset: Iterable[Instance] = None,
                  validation_metric: str = "-loss",
                  serialization_dir: str = None,
                  num_epochs: int = 20,
@@ -67,6 +68,7 @@ class GanTrainer(TrainerBase):
         self.noise_iterator = noise_iterator
 
         self._validation_dataset = validation_dataset
+        self._test_dataset = test_dataset
 
         self._num_epochs = num_epochs
         self._batch_size = batch_size
@@ -94,7 +96,6 @@ class GanTrainer(TrainerBase):
         data_iterator = self.data_iterator(self.train_dataset)
         noise_iterator = self.noise_iterator(self.noise_dataset)
         loop = Tqdm.tqdm(range(self.num_loop_discriminator), total=self.num_loop_discriminator)
-        metrics = {}
 
         for _ in loop:
             batches_this_loop += 1
@@ -127,13 +128,13 @@ class GanTrainer(TrainerBase):
             self.optimizer.step()
 
             # Update the description with the latest metrics
-            metrics['d_real_loss'] = dis_real_loss / batches_this_loop
-            metrics['d_fake_loss'] = dis_fake_loss / batches_this_loop
             loop.set_description(
-                training_util.description_from_metrics(metrics),
+                training_util.description_from_metrics({'d_real_loss': dis_real_loss / batches_this_loop,
+                                                        'd_fake_loss': dis_fake_loss / batches_this_loop}),
                 refresh=False
             )
-        return metrics
+        return {'d_real_loss': dis_real_loss / batches_this_loop,
+                'd_fake_loss': dis_fake_loss / batches_this_loop}
 
     def _train_epoch_generator(self):
         logger.info('### Training generator ###')
@@ -144,7 +145,6 @@ class GanTrainer(TrainerBase):
         self.optimizer.stage = 'generator'
         noise_iterator = self.noise_iterator(self.noise_dataset)
         loop = Tqdm.tqdm(range(self.num_loop_generator))
-        metrics = {}
 
         for _ in loop:
             batches_this_loop += 1
@@ -167,12 +167,11 @@ class GanTrainer(TrainerBase):
             self.optimizer.step()
 
             # Update the description with the latest metrics
-            metrics['g_loss'] = gen_loss / batches_this_loop
             loop.set_description(
-                training_util.description_from_metrics(metrics),
+                training_util.description_from_metrics({'g_loss': gen_loss / batches_this_loop}),
                 refresh=False
             )
-        return metrics
+        return {'g_loss': gen_loss / batches_this_loop}
 
     def _train_epoch_classifier(self):
         logger.info('### Training classifier ###')
@@ -184,7 +183,6 @@ class GanTrainer(TrainerBase):
 
         data_iterator = self.data_iterator(self.train_dataset)
         loop = Tqdm.tqdm(range(self.num_loop_classifier))
-        metrics = {}
 
         for _ in loop:
             batches_this_loop += 1
@@ -203,12 +201,11 @@ class GanTrainer(TrainerBase):
             self.optimizer.step()
 
             # Update the description with the latest metrics
-            metrics['cls_loss'] = cls_loss / batches_this_loop
             loop.set_description(
-                training_util.description_from_metrics(metrics),
+                training_util.description_from_metrics({'cls_loss': cls_loss / batches_this_loop}),
                 refresh=False
             )
-        return metrics
+        return {'cls_loss': cls_loss / batches_this_loop}
 
     def _train_epoch(self, epoch: int) -> Dict[str, float]:
 
@@ -223,28 +220,56 @@ class GanTrainer(TrainerBase):
         self.model.train()
 
         # (1/3) First train the discriminator
-        metric_dis = self._train_epoch_discriminator()
+        loss_dis = self._train_epoch_discriminator()
 
         # (2/3) Then, train the generator
-        metric_gen = self._train_epoch_generator()
+        loss_gen = self._train_epoch_generator()
 
         # (3/3) Finally, train the classifier
-        metric_cls = self._train_epoch_classifier()
+        loss_cls = self._train_epoch_classifier()
 
-        # return the combined metric
-        metric = {}
-        metric.update(metric_dis)
-        metric.update(metric_gen)
-        metric.update(metric_cls)
-        return metric
+        # return the metrics, and reset metrics as the epoch ends
+        metrics = self.model.get_metrics(reset=True)
+        metrics.update(loss_dis)
+        metrics.update(loss_gen)
+        metrics.update(loss_cls)
+        return metrics
+
+    def test(self) -> Dict[str, Any]:
+        logger.info("### Testing ###")
+        with torch.no_grad():
+            self.model.eval()
+
+            test_iterator = self.data_iterator(self._test_dataset, num_epochs=1, shuffle=False)
+            # val_iterator = lazy_groups_of(val_iterator, 1)
+            num_test_batches = math.ceil(self.data_iterator.get_num_batches(self._test_dataset))
+            test_generator_tqdm = Tqdm.tqdm(test_iterator, total=num_test_batches)
+
+            batches_this_epoch = 0
+            test_loss = 0.
+            test_metrics = {}
+
+            for batch in test_generator_tqdm:
+                # batch = batch[0]
+                batch = nn_util.move_to_device(batch, self._cuda_devices[0])
+                features = self.model.feature_extractor(batch['text'])
+                cls_error = self.model.classifier(features, batch['label'])['loss']
+
+                batches_this_epoch += 1
+                test_loss += cls_error.mean().item()
+
+                # Update the description with the latest metrics
+                test_metrics = training_util.get_metrics(self.model, test_loss, batches_this_epoch)
+                description = training_util.description_from_metrics(test_metrics)
+                test_generator_tqdm.set_description(description, refresh=False)
+
+            return test_metrics
 
     def train(self) -> Dict[str, Any]:
 
         logger.info("Beginning training.")
 
-        train_metrics: Dict[str, float] = {}
         val_metrics: Dict[str, float] = {}
-        this_epoch_val_metric: float = None
         metrics: Dict[str, Any] = {}
         epochs_trained = 0
         training_start_time = time.time()
@@ -271,7 +296,8 @@ class GanTrainer(TrainerBase):
             # Validation
             if self._validation_dataset is not None:
                 with torch.no_grad():
-                    # We have a validation set, so compute all the metrics on it.
+                    # We have a validation set, so compute all the metrics on it,
+                    # and reset the metrics as validation ends.
                     val_loss, num_batches = self._validation_loss()
                     val_metrics = training_util.get_metrics(self.model, val_loss, num_batches, reset=True)
 
@@ -356,9 +382,7 @@ class GanTrainer(TrainerBase):
             val_loss += cls_error.mean().item()
 
             # Update the description with the latest metrics
-            val_metrics = training_util.get_metrics(self.model.classifier, val_loss, batches_this_epoch)
-            print(val_metrics)
-            exit()
+            val_metrics = training_util.get_metrics(self.model, val_loss, batches_this_epoch)
             description = training_util.description_from_metrics(val_metrics)
             val_generator_tqdm.set_description(description, refresh=False)
 
@@ -403,10 +427,11 @@ class GanTrainer(TrainerBase):
                     serialization_dir: str,
                     recover: bool = False) -> 'GanTrainer':
 
-        config_file = params.pop('config_file')
         training_file = params.pop('training_file')
         dev_file = params.pop('dev_file')
         test_file = params.pop('test_file')
+
+        config_file = params.pop('config_file')
         cuda_device = params.pop_int("cuda_device")
 
         # Data reader
@@ -417,6 +442,7 @@ class GanTrainer(TrainerBase):
         vocab_dataset = vocab_reader.read(cached_path(training_file))
         train_dataset = train_reader.read(cached_path(training_file))
         validation_dataset = val_reader.read(cached_path(dev_file))
+        test_dataset = val_reader.read(cached_path(test_file))
 
         noise_reader = DatasetReader.from_params(params.pop("noise_reader"))
         noise_dataset = noise_reader.read("")
@@ -430,7 +456,6 @@ class GanTrainer(TrainerBase):
         logging.info('Vocab size: %s' % vocab.get_vocab_size())
         # vocab.print_statistics()
         # print(vocab.get_token_to_index_vocabulary('labels'))
-
         # Iterator
         data_iterator = DataIterator.from_params(params.pop("training_iterator"))
         data_iterator.index_with(vocab)
@@ -489,6 +514,7 @@ class GanTrainer(TrainerBase):
                    data_iterator=data_iterator,
                    noise_iterator=noise_iterator,
                    validation_dataset=validation_dataset,
+                   test_dataset=test_dataset,
                    serialization_dir=serialization_dir,
                    num_epochs=num_epochs,
                    batch_size=batch_size,

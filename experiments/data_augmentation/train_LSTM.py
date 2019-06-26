@@ -165,8 +165,10 @@ def experiment_stance():
     import tempfile
     serialization_dir_ = tempfile.mkdtemp()
     trainer_ = TrainerBase.from_params(params_, serialization_dir_)
-    metrics_ = trainer_.train()
-    pprint(metrics_)
+    train_metrics = trainer_.train()
+    pprint(train_metrics)
+    test_metrics = trainer_.test()
+    pprint(test_metrics)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+from typing import Dict
 from allennlp.models import Model
 from allennlp.common.params import Params
 
@@ -32,3 +33,13 @@ class Gan(Model):
         self.generator = generator
         self.discriminator = discriminator
         self.classifier = classifier
+
+    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        metrics_generator = self.generator.get_metrics(reset=reset)
+        metrics_discriminator = self.discriminator.get_metrics(reset=reset)
+        metrics_classifier = self.classifier.get_metrics(reset=reset)
+        metrics = {}
+        metrics.update(metrics_generator)
+        metrics.update(metrics_discriminator)
+        metrics.update(metrics_classifier)
+        return metrics
