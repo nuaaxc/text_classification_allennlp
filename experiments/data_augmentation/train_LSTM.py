@@ -160,8 +160,8 @@ def experiment_stance():
             "patience": patience,
             "num_loop_discriminator": 10,
             "num_loop_generator": 10,
-            "num_loop_classifier_on_real": 50,
-            "num_loop_classifier_on_fake": 500,
+            "num_loop_classifier_on_real": 100,
+            "num_loop_classifier_on_fake": 4000,
         })
 
     import tempfile

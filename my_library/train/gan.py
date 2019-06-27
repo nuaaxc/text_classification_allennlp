@@ -241,7 +241,10 @@ class GanTrainer(TrainerBase):
                 training_util.description_from_metrics({'cls_loss_on_fake': cls_loss / batches_this_loop}),
                 refresh=False
             )
-        return {'cls_loss_on_fake': cls_loss / batches_this_loop}
+        if batches_this_loop:
+            return {'cls_loss_on_fake': cls_loss / batches_this_loop}
+        else:
+            return {'cls_loss_on_fake': 0.}
 
     def _train_epoch(self, epoch: int) -> Dict[str, float]:
 
