@@ -53,7 +53,8 @@ class GanTrainer(TrainerBase):
                  keep_serialized_model_every_num_seconds: int = None,
                  num_loop_discriminator: int = 10,
                  num_loop_generator: int = 10,
-                 num_loop_classifier: int = 10,
+                 num_loop_classifier_on_real: int = 10,
+                 num_loop_classifier_on_fake: int = 10,
                  ) -> None:
         super().__init__(serialization_dir, cuda_device)
 
@@ -82,7 +83,8 @@ class GanTrainer(TrainerBase):
         self._batch_num_total = 0
         self.num_loop_discriminator = num_loop_discriminator
         self.num_loop_generator = num_loop_generator
-        self.num_loop_classifier = num_loop_classifier
+        self.num_loop_classifier_on_real = num_loop_classifier_on_real
+        self.num_loop_classifier_on_fake = num_loop_classifier_on_fake
 
     def _train_epoch_discriminator(self):
         logger.info('### Training discriminator ###')
@@ -173,8 +175,8 @@ class GanTrainer(TrainerBase):
             )
         return {'g_loss': gen_loss / batches_this_loop}
 
-    def _train_epoch_classifier(self):
-        logger.info('### Training classifier ###')
+    def _train_epoch_classifier_on_real(self):
+        logger.info('### Training classifier on real data ###')
 
         cls_loss = 0.
         batches_this_loop = 0
@@ -182,7 +184,7 @@ class GanTrainer(TrainerBase):
         self.optimizer.stage = 'classifier'
 
         data_iterator = self.data_iterator(self.train_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_classifier))
+        loop = Tqdm.tqdm(range(self.num_loop_classifier_on_real))
 
         for _ in loop:
             batches_this_loop += 1
@@ -202,10 +204,44 @@ class GanTrainer(TrainerBase):
 
             # Update the description with the latest metrics
             loop.set_description(
-                training_util.description_from_metrics({'cls_loss': cls_loss / batches_this_loop}),
+                training_util.description_from_metrics({'cls_loss_on_real': cls_loss / batches_this_loop}),
                 refresh=False
             )
-        return {'cls_loss': cls_loss / batches_this_loop}
+        return {'cls_loss_on_real': cls_loss / batches_this_loop}
+
+    def _train_epoch_classifier_on_fake(self):
+        logger.info('### Training classifier on fake data ###')
+
+        cls_loss = 0.
+        batches_this_loop = 0
+
+        self.optimizer.stage = 'classifier'
+
+        noise_iterator = self.noise_iterator(self.noise_dataset)
+        loop = Tqdm.tqdm(range(self.num_loop_classifier_on_fake))
+
+        for _ in loop:
+            batches_this_loop += 1
+
+            self.optimizer.zero_grad()
+
+            noise = next(noise_iterator)
+            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
+
+            generated = self.model.generator(noise["array"])['output']
+            cls_error = self.model.classifier(generated, noise['label'])['loss']
+            cls_error.backward()
+
+            cls_loss += cls_error.mean().item()
+
+            self.optimizer.step()
+
+            # Update the description with the latest metrics
+            loop.set_description(
+                training_util.description_from_metrics({'cls_loss_on_fake': cls_loss / batches_this_loop}),
+                refresh=False
+            )
+        return {'cls_loss_on_fake': cls_loss / batches_this_loop}
 
     def _train_epoch(self, epoch: int) -> Dict[str, float]:
 
@@ -219,20 +255,24 @@ class GanTrainer(TrainerBase):
 
         self.model.train()
 
-        # (1/3) First train the discriminator
+        # (1/4) First train the discriminator
         loss_dis = self._train_epoch_discriminator()
 
-        # (2/3) Then, train the generator
+        # (2/4) Then, train the generator
         loss_gen = self._train_epoch_generator()
 
-        # (3/3) Finally, train the classifier
-        loss_cls = self._train_epoch_classifier()
+        # (3/4) Nex, train the classifier on real data
+        loss_cls_on_real = self._train_epoch_classifier_on_real()
+
+        # (4/4) Finally, train the classifier on generated fake data
+        loss_cls_on_fake = self._train_epoch_classifier_on_fake()
 
         # return the metrics, and reset metrics as the epoch ends
         metrics = self.model.get_metrics(reset=True)
         metrics.update(loss_dis)
         metrics.update(loss_gen)
-        metrics.update(loss_cls)
+        metrics.update(loss_cls_on_real)
+        metrics.update(loss_cls_on_fake)
         return metrics
 
     def test(self) -> Dict[str, Any]:
@@ -460,6 +500,7 @@ class GanTrainer(TrainerBase):
         data_iterator = DataIterator.from_params(params.pop("training_iterator"))
         data_iterator.index_with(vocab)
         noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
+        noise_iterator.index_with(vocab)
 
         # Model
         feature_extractor = Model.from_params(params.pop("feature_extractor"), vocab=vocab)
@@ -501,7 +542,8 @@ class GanTrainer(TrainerBase):
         patience = params.pop_int("patience")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         num_loop_generator = params.pop_int("num_loop_generator")
-        num_loop_classifier = params.pop_int("num_loop_classifier")
+        num_loop_classifier_on_real = params.pop_int("num_loop_classifier_on_real")
+        num_loop_classifier_on_fake = params.pop_int("num_loop_classifier_on_fake")
 
         params.pop("trainer")
 
@@ -522,4 +564,5 @@ class GanTrainer(TrainerBase):
                    patience=patience,
                    num_loop_discriminator=num_loop_discriminator,
                    num_loop_generator=num_loop_generator,
-                   num_loop_classifier=num_loop_classifier)
+                   num_loop_classifier_on_real=num_loop_classifier_on_real,
+                   num_loop_classifier_on_fake=num_loop_classifier_on_fake)

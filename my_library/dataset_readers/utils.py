@@ -1,9 +1,8 @@
-from typing import Dict, Iterable, Any
+from typing import List, Iterable, Any
 
 import random
 import os
 import numpy as np
-from tqdm import tqdm
 from collections import defaultdict
 
 from config import StanceConfig, YahooConfig
@@ -12,7 +11,7 @@ from my_library.dataset_readers.clearn_text import clean_tweet_text
 from allennlp.common import Registrable
 from allennlp.data import Instance
 from allennlp.data.dataset_readers import DatasetReader
-from allennlp.data.fields import ArrayField
+from allennlp.data.fields import ArrayField, LabelField
 
 
 class InputSampler(Registrable):
@@ -52,10 +51,12 @@ class SamplingReader(DatasetReader):
     """
     def __init__(self,
                  sampler: InputSampler,
+                 label_set: List,
                  dim: int) -> None:
         super().__init__(lazy=True)
         self.sampler = sampler
         self.dim = dim
+        self.label_set = label_set
 
     def _read(self, _: str) -> Iterable[Instance]:
         while True:
@@ -64,7 +65,8 @@ class SamplingReader(DatasetReader):
 
     def text_to_instance(self, example: np.ndarray) -> Instance:  # type: ignore
         # pylint: disable=arguments-differ
-        return Instance({"array": ArrayField(example)})
+        return Instance({"array": ArrayField(example),
+                         "label": LabelField(random.choice(self.label_set))})
 
 
 def train_dev_split(train_raw_path,

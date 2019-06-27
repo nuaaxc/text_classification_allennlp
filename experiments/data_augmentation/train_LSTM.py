@@ -63,7 +63,8 @@ def experiment_stance():
             "noise_reader": {
                 "type": "sampling",
                 "sampler": {"type": "uniform"},
-                "dim": d_hidden
+                "dim": d_hidden,
+                "label_set": config_file.labels
             },
 
             # Iterators
@@ -159,7 +160,8 @@ def experiment_stance():
             "patience": patience,
             "num_loop_discriminator": 10,
             "num_loop_generator": 10,
-            "num_loop_classifier": 100,
+            "num_loop_classifier_on_real": 50,
+            "num_loop_classifier_on_fake": 500,
         })
 
     import tempfile

@@ -1,4 +1,4 @@
-from typing import Iterator, List, Dict, Callable
+from typing import Iterator, Dict
 import logging
 import random
 
