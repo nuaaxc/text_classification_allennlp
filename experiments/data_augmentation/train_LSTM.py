@@ -27,7 +27,7 @@ def experiment_stance():
                                                     'h', str(hparam['d_hidden']),
                                                     'dropout', str(hparam['dropout']),
                                                     'frac', str(hparam['file_frac'])])
-
+    n_classes = config_file.n_label
     batch_size = config_file.hparam[stance_target]['batch_size']
     lr = config_file.hparam[stance_target]['lr']
     d_word_emb = config_file.hparam[stance_target]['d_word_emb']
@@ -110,8 +110,14 @@ def experiment_stance():
             },
             "generator": {
                 "type": "generator-base",
+                "label_emb": {
+                    "type": "embedding",
+                    "num_embeddings": n_classes,
+                    "embedding_dim": d_hidden,
+                    "trainable": True
+                },
                 "feed_forward": {
-                    "input_dim": d_hidden,
+                    "input_dim": 2 * d_hidden,
                     "num_layers": 2,
                     "hidden_dims": d_hidden,
                     "activations": "relu",
@@ -120,8 +126,14 @@ def experiment_stance():
             },
             "discriminator": {
                 "type": "discriminator-base",
+                "label_emb": {
+                    "type": "embedding",
+                    "num_embeddings": n_classes,
+                    "embedding_dim": d_hidden,
+                    "trainable": True
+                },
                 "feed_forward": {
-                    "input_dim": d_hidden,
+                    "input_dim": 2 * d_hidden,
                     "num_layers": 2,
                     "hidden_dims": [d_hidden, 1],
                     "activations": "relu",
@@ -161,7 +173,7 @@ def experiment_stance():
             "num_loop_discriminator": 10,
             "num_loop_generator": 10,
             "num_loop_classifier_on_real": 100,
-            "num_loop_classifier_on_fake": 4000,
+            "num_loop_classifier_on_fake": 100,
         })
 
     import tempfile

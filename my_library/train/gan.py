@@ -4,6 +4,7 @@ import math
 import time
 import os
 import datetime
+import random
 import numpy as np
 from itertools import chain
 
@@ -28,6 +29,7 @@ from allennlp.training import util as training_util
 
 from my_library.optimisation import GanOptimizer
 from my_library.models.data_augmentation import Gan
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -115,13 +117,14 @@ class GanTrainer(TrainerBase):
 
             # Real example, want discriminator to predict 1.
             ones = nn_util.move_to_device(torch.ones((self._batch_size, 1)), self._cuda_devices[0])
-            real_error = self.model.discriminator(features, ones)["loss"]
+            real_error = self.model.discriminator(features, batch['label'], ones)["loss"]
             real_error.backward()
 
             # Fake example, want discriminator to predict 0.
-            fake_data = self.model.generator(noise["array"])["output"]
+            fake_data = self.model.generator(noise["array"],
+                                             noise["label"])["output"]
             zeros = nn_util.move_to_device(torch.zeros((self._batch_size, 1)), self._cuda_devices[0])
-            fake_error = self.model.discriminator(fake_data, zeros)["loss"]
+            fake_error = self.model.discriminator(fake_data, noise["label"], zeros)["loss"]
             fake_error.backward()
 
             dis_real_loss += real_error.mean().item()
@@ -156,7 +159,9 @@ class GanTrainer(TrainerBase):
             noise = next(noise_iterator)
             noise = nn_util.move_to_device(noise, self._cuda_devices[0])
 
-            generated = self.model.generator(noise["array"], self.model.discriminator)
+            generated = self.model.generator(noise["array"],
+                                             noise["label"],
+                                             self.model.discriminator)
             # fake_data = generated["output"]
             fake_error = generated["loss"]
             fake_error.backward()
@@ -228,7 +233,8 @@ class GanTrainer(TrainerBase):
             noise = next(noise_iterator)
             noise = nn_util.move_to_device(noise, self._cuda_devices[0])
 
-            generated = self.model.generator(noise["array"])['output']
+            generated = self.model.generator(noise["array"],
+                                             noise["label"])['output']
             cls_error = self.model.classifier(generated, noise['label'])['loss']
             cls_error.backward()
 
@@ -268,14 +274,17 @@ class GanTrainer(TrainerBase):
         loss_cls_on_real = self._train_epoch_classifier_on_real()
 
         # (4/4) Finally, train the classifier on generated fake data
-        loss_cls_on_fake = self._train_epoch_classifier_on_fake()
+        loss_cls_on_fake = None
+        if epoch >= 5:
+            loss_cls_on_fake = self._train_epoch_classifier_on_fake()
 
         # return the metrics, and reset metrics as the epoch ends
         metrics = self.model.get_metrics(reset=True)
         metrics.update(loss_dis)
         metrics.update(loss_gen)
         metrics.update(loss_cls_on_real)
-        metrics.update(loss_cls_on_fake)
+        if loss_cls_on_fake:
+            metrics.update(loss_cls_on_fake)
         return metrics
 
     def test(self) -> Dict[str, Any]:
@@ -507,8 +516,8 @@ class GanTrainer(TrainerBase):
 
         # Model
         feature_extractor = Model.from_params(params.pop("feature_extractor"), vocab=vocab)
-        generator = Model.from_params(params.pop("generator"))
-        discriminator = Model.from_params(params.pop("discriminator"))
+        generator = Model.from_params(params.pop("generator"), vocab=None)
+        discriminator = Model.from_params(params.pop("discriminator"), vocab=None)
         classifier = Model.from_params(params.pop("classifier"))
 
         if isinstance(cuda_device, list):

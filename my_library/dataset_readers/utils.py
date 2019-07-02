@@ -13,6 +13,8 @@ from allennlp.data import Instance
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.fields import ArrayField, LabelField
 
+random.seed(2019)
+
 
 class InputSampler(Registrable):
     """

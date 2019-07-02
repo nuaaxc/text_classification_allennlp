@@ -17,15 +17,16 @@ class FeatureExtractor(Model):
                  feed_forward: FeedForward,
                  ) -> None:
         super().__init__(vocab)
-
         self.text_field_embedder = text_field_embedder
         self.text_encoder = text_encoder
         self.feed_forward = feed_forward
 
-    def forward(self, text: Dict[str, Any]) -> Dict[str, torch.Tensor]:
+    def forward(self,
+                text: torch.Tensor,
+                ) -> Dict[str, torch.Tensor]:
         mask = get_text_field_mask(text)
-        embeddig = self.text_field_embedder(text)
-        encoding = self.text_encoder(embeddig, mask)
-        output = self.feed_forward(encoding)
+        embeddig_text = self.text_field_embedder(text)
+        encoded_text = self.text_encoder(embeddig_text, mask)
+        output = self.feed_forward(encoded_text)
         return output
 

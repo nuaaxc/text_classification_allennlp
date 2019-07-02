@@ -54,7 +54,7 @@ class GanOptimizer(torch.optim.Optimizer):
         generator_parameters = [("", param) for name, param in parameters
                                 if hasattr(param, '_generator')]
         discriminator_parameters = [("", param) for name, param in parameters
-                                    if hasattr(param, '_discriminator') or hasattr(param, '_feature_extractor')]
+                                    if hasattr(param, '_discriminator')]
         classifier_parameters = [("", param) for name, param in parameters
                                  if hasattr(param, '_feature_extractor') or hasattr(param, '_classifier')]
 

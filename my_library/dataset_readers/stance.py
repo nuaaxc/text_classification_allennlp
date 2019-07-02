@@ -13,6 +13,8 @@ from allennlp.data.tokenizers import Tokenizer, WordTokenizer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+random.seed(2019)
+
 
 @DatasetReader.register("stance")
 class StanceDatasetReader(DatasetReader):
