@@ -91,8 +91,7 @@ class GanTrainer(TrainerBase):
     def _train_epoch_discriminator(self):
         logger.info('### Training discriminator ###')
 
-        dis_real_loss = 0.0
-        dis_fake_loss = 0.0
+        d_loss = 0.0
         batches_this_loop = 0
 
         self.optimizer.stage = 'discriminator'
@@ -112,39 +111,33 @@ class GanTrainer(TrainerBase):
             batch = nn_util.move_to_device(batch, self._cuda_devices[0])
             noise = nn_util.move_to_device(noise, self._cuda_devices[0])
 
-            # extract features
+            # Real example
             features = self.model.feature_extractor(batch['text'])
+            real_validity = self.model.discriminator(features, batch['label'])["output"]
 
-            # Real example, want discriminator to predict 1.
-            ones = nn_util.move_to_device(torch.ones((self._batch_size, 1)), self._cuda_devices[0])
-            real_error = self.model.discriminator(features, batch['label'], ones)["loss"]
-            real_error.backward()
+            # Fake example
+            fake_data = self.model.generator(noise["array"], noise["label"])["output"]
+            fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
 
-            # Fake example, want discriminator to predict 0.
-            fake_data = self.model.generator(noise["array"],
-                                             noise["label"])["output"]
-            zeros = nn_util.move_to_device(torch.zeros((self._batch_size, 1)), self._cuda_devices[0])
-            fake_error = self.model.discriminator(fake_data, noise["label"], zeros)["loss"]
-            fake_error.backward()
+            d_error = -torch.mean(real_validity) + torch.mean(fake_validity)
 
-            dis_real_loss += real_error.mean().item()
-            dis_fake_loss += fake_error.mean().item()
+            d_error.backward()
+
+            d_loss += d_error.item()
 
             self.optimizer.step()
 
             # Update the description with the latest metrics
             loop.set_description(
-                training_util.description_from_metrics({'d_real_loss': dis_real_loss / batches_this_loop,
-                                                        'd_fake_loss': dis_fake_loss / batches_this_loop}),
+                training_util.description_from_metrics({'d_loss': d_loss / batches_this_loop}),
                 refresh=False
             )
-        return {'d_real_loss': dis_real_loss / batches_this_loop,
-                'd_fake_loss': dis_fake_loss / batches_this_loop}
+        return {'d_loss': d_loss / batches_this_loop}
 
     def _train_epoch_generator(self):
         logger.info('### Training generator ###')
 
-        gen_loss = 0.0
+        g_loss = 0.0
         batches_this_loop = 0
 
         self.optimizer.stage = 'generator'
@@ -169,16 +162,16 @@ class GanTrainer(TrainerBase):
             # fake_mean += fake_data.mean()
             # fake_stdev += fake_data.std()
 
-            gen_loss += fake_error.mean().item()
+            g_loss += fake_error.mean().item()
 
             self.optimizer.step()
 
             # Update the description with the latest metrics
             loop.set_description(
-                training_util.description_from_metrics({'g_loss': gen_loss / batches_this_loop}),
+                training_util.description_from_metrics({'g_loss': g_loss / batches_this_loop}),
                 refresh=False
             )
-        return {'g_loss': gen_loss / batches_this_loop}
+        return {'g_loss': g_loss / batches_this_loop}
 
     def _train_epoch_classifier_on_real(self):
         logger.info('### Training classifier on real data ###')

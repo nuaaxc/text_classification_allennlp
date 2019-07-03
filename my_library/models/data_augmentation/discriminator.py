@@ -20,15 +20,10 @@ class Discriminator(Model):
         super().__init__(None)
         self.label_emb = label_emb
         self.feed_forward = feed_forward
-        self.loss = torch.nn.BCELoss()
 
     def forward(self,  # type: ignore
                 text: torch.Tensor,
-                label: torch.Tensor,
-                validity_labels: torch.Tensor = None) -> Dict[str, torch.Tensor]:
+                label: torch.Tensor) -> Dict[str, torch.Tensor]:
         embbed_label = self.label_emb(label)
-        output = torch.sigmoid(self.feed_forward(torch.cat([text, embbed_label], dim=-1)))
-        output_dict = {"output": output}
-        if validity_labels is not None:
-            output_dict["loss"] = self.loss(output, validity_labels)
-        return output_dict
+        output = self.feed_forward(torch.cat([text, embbed_label], dim=-1))
+        return {"output": output}

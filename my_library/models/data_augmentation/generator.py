@@ -17,7 +17,6 @@ class Generator(Model):
         super().__init__(None)
         self.label_emb = label_emb
         self.feed_forward = feed_forward
-        self.loss = nn.BCELoss()
 
     def forward(self,
                 z_text: torch.Tensor,
@@ -28,9 +27,8 @@ class Generator(Model):
         features = self.feed_forward(torch.cat([z_text, embbed_label], dim=-1))
         output_dict = {'output': features}
         if discriminator is not None:
-            predicted = discriminator(features, z_label)['output']
-            desired = torch.ones_like(predicted)
-            output_dict['loss'] = self.loss(predicted, desired)
+            fake_validity = discriminator(features, z_label)['output']
+            output_dict['loss'] = -torch.mean(fake_validity)
         return output_dict
 
 
