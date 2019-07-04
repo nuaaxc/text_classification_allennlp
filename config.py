@@ -95,11 +95,11 @@ class StanceConfig(DirConfig):
             'lr': 0.0001,
             'epochs': 999,
             'patience': 5,
-            'batch_size': 8,
+            'batch_size': 16,
             'd_word_emb': 300,
             'd_rnn': 128,
             'd_hidden': 100,
-            'dropout': 0.3,
+            'dropout': 0.4,
             'lambda': 0,
             'cuda_device': 0,
             'file_frac': 100,
@@ -150,3 +150,5 @@ class StanceConfig(DirConfig):
     dev_ratio_path = os.path.join(data_dir, 'dev_%s_%sp.txt')
     test_raw_path = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-%s.txt')
     test_path = os.path.join(data_dir, 'test_%s.txt')
+
+    gen_data_path = os.path.join(result_dir, 'g_data_%s.th')

@@ -33,16 +33,14 @@ from my_library.models.data_augmentation import Gan
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
-
-def compute_gradient_penalty(D, real_samples, fake_samples, labels):
+def compute_gradient_penalty(D, real_samples, fake_samples, labels, cuda_device):
     """Calculates the gradient penalty loss for WGAN GP"""
     # Random weight term for interpolation between real and fake samples
-    alpha = torch.rand(real_samples.size(0), 1, dtype=torch.float32, device=device)
+    alpha = torch.rand(real_samples.size(0), 1, dtype=torch.float32).cuda(cuda_device)
     # Get random interpolation between real and fake samples
     interpolates = (alpha * real_samples + (1 - alpha) * fake_samples).requires_grad_(True)
-    fake = torch.ones((real_samples.size(0), 1), requires_grad=False, device=device)
+    fake = torch.ones((real_samples.size(0), 1), requires_grad=False).cuda(cuda_device)
     d_interpolates = D(interpolates, labels)["output"]
     # Get gradient w.r.t. interpolates
     gradients = torch.autograd.grad(
@@ -111,6 +109,8 @@ class GanTrainer(TrainerBase):
         self.num_loop_classifier_on_real = num_loop_classifier_on_real
         self.num_loop_classifier_on_fake = num_loop_classifier_on_fake
 
+        self.cuda_device = cuda_device
+
     def _train_epoch_discriminator(self):
         logger.info('### Training discriminator ###')
 
@@ -146,7 +146,8 @@ class GanTrainer(TrainerBase):
             gradient_penalty = compute_gradient_penalty(self.model.discriminator,
                                                         features.data,
                                                         fake_data.data,
-                                                        torch.randint_like(noise["label"], 0, 3, device=device))
+                                                        torch.randint_like(noise["label"], 0, 3),
+                                                        self.cuda_device)
 
             d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
 
@@ -247,6 +248,8 @@ class GanTrainer(TrainerBase):
         noise_iterator = self.noise_iterator(self.noise_dataset)
         loop = Tqdm.tqdm(range(self.num_loop_classifier_on_fake))
 
+        g_data = []
+
         for _ in loop:
             batches_this_loop += 1
 
@@ -257,6 +260,9 @@ class GanTrainer(TrainerBase):
 
             generated = self.model.generator(noise["array"],
                                              noise["label"])['output']
+
+            g_data.append(generated.data.cpu().numpy())
+
             cls_error = self.model.classifier(generated, noise['label'])['loss']
             cls_error.backward()
 
@@ -270,11 +276,11 @@ class GanTrainer(TrainerBase):
                 refresh=False
             )
         if batches_this_loop:
-            return {'cls_loss_on_fake': cls_loss / batches_this_loop}
+            return {'cls_loss_on_fake': cls_loss / batches_this_loop}, np.vstack(g_data)
         else:
-            return {'cls_loss_on_fake': 0.}
+            return {'cls_loss_on_fake': 0.}, np.vstack(g_data)
 
-    def _train_epoch(self, epoch: int) -> Dict[str, float]:
+    def _train_epoch(self, epoch: int) -> Any:
 
         logger.info("Epoch %d/%d", epoch, self._num_epochs - 1)
         peak_cpu_usage = peak_memory_mb()
@@ -283,6 +289,8 @@ class GanTrainer(TrainerBase):
         for gpu, memory in gpu_memory_mb().items():
             gpu_usage.append((gpu, memory))
             logger.info(f"GPU {gpu} memory usage MB: {memory}")
+
+        g_data = None
 
         self.model.train()
 
@@ -297,8 +305,8 @@ class GanTrainer(TrainerBase):
 
         # (4/4) Finally, train the classifier on generated fake data
         loss_cls_on_fake = None
-        if epoch >= 10:
-            loss_cls_on_fake = self._train_epoch_classifier_on_fake()
+        if epoch >= 0:
+            loss_cls_on_fake, g_data = self._train_epoch_classifier_on_fake()
 
         # return the metrics, and reset metrics as the epoch ends
         metrics = self.model.get_metrics(reset=True)
@@ -307,7 +315,8 @@ class GanTrainer(TrainerBase):
         metrics.update(loss_cls_on_real)
         if loss_cls_on_fake:
             metrics.update(loss_cls_on_fake)
-        return metrics
+
+        return metrics, g_data
 
     def test(self) -> Dict[str, Any]:
         logger.info("### Testing ###")
@@ -339,7 +348,7 @@ class GanTrainer(TrainerBase):
 
             return test_metrics
 
-    def train(self) -> Dict[str, Any]:
+    def train(self) -> Any:
 
         logger.info("Beginning training.")
 
@@ -352,12 +361,17 @@ class GanTrainer(TrainerBase):
         for key, value in self._metric_tracker.best_epoch_metrics.items():
             metrics["best_validation_" + key] = value
 
+        g_data_epochs = {}
+
         # train over epochs
         for epoch in range(self._num_epochs):
             epoch_start_time = time.time()
 
             # train over one epoch
-            train_metrics = self._train_epoch(epoch)
+            train_metrics, g_data = self._train_epoch(epoch)
+
+            if g_data is not None:
+                g_data_epochs[epoch] = g_data
 
             # get peak of memory usage
             if 'cpu_memory_MB' in train_metrics:
@@ -429,7 +443,7 @@ class GanTrainer(TrainerBase):
         if best_model_state:
             self.model.load_state_dict(best_model_state)
 
-        return metrics
+        return metrics, g_data_epochs
 
     def _validation_loss(self) -> Tuple[float, int]:
         """
