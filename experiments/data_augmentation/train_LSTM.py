@@ -1,5 +1,6 @@
 import logging
 import random
+import numpy as np
 from pprint import pprint
 import torch
 
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 torch.manual_seed(2019)
 random.seed(2019)
+np.random.seed(2019)
 
 
 def experiment_stance():
@@ -171,9 +173,9 @@ def experiment_stance():
             "cuda_device": cuda_device,
             "patience": patience,
             "num_loop_discriminator": 10,
-            "num_loop_generator": 10,
+            "num_loop_generator": 2,
             "num_loop_classifier_on_real": 100,
-            "num_loop_classifier_on_fake": 100,
+            "num_loop_classifier_on_fake": 600,
         })
 
     import tempfile

@@ -33,6 +33,29 @@ from my_library.models.data_augmentation import Gan
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
+
+def compute_gradient_penalty(D, real_samples, fake_samples, labels):
+    """Calculates the gradient penalty loss for WGAN GP"""
+    # Random weight term for interpolation between real and fake samples
+    alpha = torch.rand(real_samples.size(0), 1, dtype=torch.float32, device=device)
+    # Get random interpolation between real and fake samples
+    interpolates = (alpha * real_samples + (1 - alpha) * fake_samples).requires_grad_(True)
+    fake = torch.ones((real_samples.size(0), 1), requires_grad=False, device=device)
+    d_interpolates = D(interpolates, labels)["output"]
+    # Get gradient w.r.t. interpolates
+    gradients = torch.autograd.grad(
+        outputs=d_interpolates,
+        inputs=interpolates,
+        grad_outputs=fake,
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True,
+    )[0]
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    return gradient_penalty
+
 
 @TrainerBase.register("gan-base")
 class GanTrainer(TrainerBase):
@@ -119,7 +142,13 @@ class GanTrainer(TrainerBase):
             fake_data = self.model.generator(noise["array"], noise["label"])["output"]
             fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
 
-            d_error = -torch.mean(real_validity) + torch.mean(fake_validity)
+            # Gradient penalty
+            gradient_penalty = compute_gradient_penalty(self.model.discriminator,
+                                                        features.data,
+                                                        fake_data.data,
+                                                        torch.randint_like(noise["label"], 0, 3, device=device))
+
+            d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
 
             d_error.backward()
 
@@ -268,7 +297,7 @@ class GanTrainer(TrainerBase):
 
         # (4/4) Finally, train the classifier on generated fake data
         loss_cls_on_fake = None
-        if epoch >= 5:
+        if epoch >= 10:
             loss_cls_on_fake = self._train_epoch_classifier_on_fake()
 
         # return the metrics, and reset metrics as the epoch ends
