@@ -34,8 +34,9 @@ def visualise(x, color, labels):
 if __name__ == '__main__':
     config_file = StanceConfig
     stance_target = 'a'
-    real_features = torch.load(config_file.real_data_path % stance_target)[17]
-    gen_features = torch.load(config_file.gen_data_path % stance_target)[17]
+    train_meta_data = torch.load(config_file.train_meta_path % stance_target)
+    real_features = train_meta_data['r_data_epochs'][15]
+    gen_features = train_meta_data['g_data_epochs'][98]
 
     colors = {
         0: 'red',

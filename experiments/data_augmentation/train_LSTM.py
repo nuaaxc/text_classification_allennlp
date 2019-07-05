@@ -12,6 +12,7 @@ from my_library.models.data_augmentation import FeatureExtractor
 from config import StanceConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logging.getLogger().setLevel(logging.INFO)
 
 torch.manual_seed(2019)
 random.seed(2019)
@@ -172,8 +173,8 @@ def experiment_stance():
             "batch_size": batch_size,
             "cuda_device": cuda_device,
             "patience": patience,
-            "num_loop_discriminator": 50,
-            "num_loop_generator": 10,
+            "num_loop_discriminator": 5,
+            "num_loop_generator": 1,
             "num_loop_classifier_on_real": 100,
             "num_loop_classifier_on_fake": 10,
         })
@@ -182,16 +183,14 @@ def experiment_stance():
     serialization_dir_ = tempfile.mkdtemp()
     trainer_ = TrainerBase.from_params(params_, serialization_dir_)
 
-    train_metrics, r_data_epochs, g_data_epochs = trainer_.train()
+    train_metrics, meta_data = trainer_.train()
     pprint(train_metrics)
     test_metrics = trainer_.test()
     pprint(test_metrics)
 
-    # save real/generated features
-    print('saving real features ...')
-    torch.save(r_data_epochs, config_file.real_data_path % stance_target)
-    print('saving generated features ...')
-    torch.save(g_data_epochs, config_file.gen_data_path % stance_target)
+    # save training meta data
+    print('saving training meta data ...')
+    torch.save(meta_data, config_file.train_meta_path % stance_target)
     print('saved.')
 
 

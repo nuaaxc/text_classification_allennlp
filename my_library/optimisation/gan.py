@@ -13,6 +13,7 @@ class GanOptimizer(torch.optim.Optimizer):
     so we cheat by encapsulating both in a single optimizer that has a state
     indicating which one to use.
     """
+
     # pylint: disable=super-init-not-called,arguments-differ
     def __init__(self,
                  generator_optimizer: torch.optim.Optimizer,
@@ -45,27 +46,21 @@ class GanOptimizer(torch.optim.Optimizer):
 
     @classmethod
     def from_params(cls, parameters: List, params: Params) -> 'GanOptimizer':
-        # Because we "tagged" the parameters, we can use getattr to figure out
-        # which ones go with which model.
 
-        # print(params.as_dict())
-        # print(params.pop("generator_optimizer").as_dict())
-        # exit()
-        generator_parameters = [("", param) for name, param in parameters
-                                if hasattr(param, '_generator')]
-        discriminator_parameters = [("", param) for name, param in parameters
-                                    if hasattr(param, '_discriminator')]
-        classifier_parameters = [("", param) for name, param in parameters
-                                 if hasattr(param, '_feature_extractor') or hasattr(param, '_classifier')]
+        g_params = [("", param) for name, param in parameters
+                    if hasattr(param, '_generator')]
+        d_params = [("", param) for name, param in parameters
+                    if hasattr(param, '_discriminator')]
+        c_params = [("", param) for name, param in parameters
+                    if hasattr(param, '_feature_extractor') or hasattr(param, '_classifier')]
 
-        generator_optimizer = Optimizer.from_params(generator_parameters,
-                                                    params.pop("generator_optimizer"))
-        discriminator_optimizer = Optimizer.from_params(discriminator_parameters,
-                                                        params.pop("discriminator_optimizer"))
-        classifier_optimizer = Optimizer.from_params(classifier_parameters,
-                                                     params.pop("classifier_optimizer"))
+        g_optimizer = Optimizer.from_params(g_params,
+                                            params.pop("generator_optimizer"))
+        d_optimizer = Optimizer.from_params(d_params,
+                                            params.pop("discriminator_optimizer"))
+        c_optimizer = Optimizer.from_params(c_params,
+                                            params.pop("classifier_optimizer"))
 
-        return cls(generator_optimizer=generator_optimizer,
-                   discriminator_optimizer=discriminator_optimizer,
-                   classifier_optimizer=classifier_optimizer)
-
+        return cls(generator_optimizer=g_optimizer,
+                   discriminator_optimizer=d_optimizer,
+                   classifier_optimizer=c_optimizer)

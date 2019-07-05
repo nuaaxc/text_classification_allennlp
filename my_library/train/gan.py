@@ -97,7 +97,8 @@ class GanTrainer(TrainerBase):
         self._num_epochs = num_epochs
         self._batch_size = batch_size
 
-        self._metric_tracker = MetricTracker(patience, validation_metric)
+        self._val_loss_tracker = MetricTracker(patience, validation_metric)
+        self._g_loss_tracker = MetricTracker(3, validation_metric)
         self._validation_metric = validation_metric[1:]
 
         self._checkpointer = Checkpointer(serialization_dir,
@@ -143,11 +144,12 @@ class GanTrainer(TrainerBase):
             fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
 
             # Gradient penalty
-            gradient_penalty = compute_gradient_penalty(self.model.discriminator,
-                                                        features.data,
-                                                        fake_data.data,
-                                                        torch.randint_like(noise["label"], 0, 3),
-                                                        self.cuda_device)
+            # gradient_penalty = compute_gradient_penalty(self.model.discriminator,
+            #                                             features.data,
+            #                                             fake_data.data,
+            #                                             torch.randint_like(noise["label"], 0, 3),
+            #                                             self.cuda_device)
+            gradient_penalty = 0.
 
             d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
 
@@ -174,6 +176,8 @@ class GanTrainer(TrainerBase):
         noise_iterator = self.noise_iterator(self.noise_dataset)
         loop = Tqdm.tqdm(range(self.num_loop_generator))
 
+        g_data = []
+
         for _ in loop:
             batches_this_loop += 1
 
@@ -185,12 +189,11 @@ class GanTrainer(TrainerBase):
             generated = self.model.generator(noise["array"],
                                              noise["label"],
                                              self.model.discriminator)
-            # fake_data = generated["output"]
+
+            g_data.append(generated["output"].data.cpu().numpy())
+
             fake_error = generated["loss"]
             fake_error.backward()
-
-            # fake_mean += fake_data.mean()
-            # fake_stdev += fake_data.std()
 
             g_loss += fake_error.mean().item()
 
@@ -201,7 +204,7 @@ class GanTrainer(TrainerBase):
                 training_util.description_from_metrics({'g_loss': g_loss / batches_this_loop}),
                 refresh=False
             )
-        return {'g_loss': g_loss / batches_this_loop}
+        return {'g_loss': g_loss / batches_this_loop}, np.vstack(g_data)
 
     def _train_epoch_classifier_on_real(self):
         logger.info('### Training classifier on real data ###')
@@ -285,47 +288,40 @@ class GanTrainer(TrainerBase):
         else:
             return {'cls_loss_on_fake': 0.}, np.vstack(g_data)
 
-    def _train_epoch(self, epoch: int) -> Any:
+    def _train_gan(self) -> Any:
+        loss_d = self._train_epoch_discriminator()
+        loss_g, g_data = self._train_epoch_generator()
+        return loss_d, loss_g, g_data
+
+    def _train_epoch(self, epoch: int, train_phase: str) -> Any:
 
         logger.info("Epoch %d/%d", epoch, self._num_epochs - 1)
-        peak_cpu_usage = peak_memory_mb()
-        logger.info(f"Peak CPU memory usage MB: {peak_cpu_usage}")
-        gpu_usage = []
-        for gpu, memory in gpu_memory_mb().items():
-            gpu_usage.append((gpu, memory))
-            logger.info(f"GPU {gpu} memory usage MB: {memory}")
-
-        r_data = None
-        g_data = None
-
+        logger.info("Training phase: %s ..." % train_phase)
         self.model.train()
 
-        # (1/4) First train the discriminator
-        loss_dis = self._train_epoch_discriminator()
+        metrics = {}
 
-        # (2/4) Then, train the generator
-        loss_gen = self._train_epoch_generator()
+        if train_phase == 'gan':              # train the GAN
+            loss_d, loss_g, g_data = self._train_gan()
+            metrics.update(loss_d)
+            metrics.update(loss_g)
+            metrics.update({'g_data': g_data})
 
-        # (3/4) Nex, train the classifier on real data
-        loss_cls_on_real = None
-        if epoch >= 0:
+        elif train_phase == 'cls_on_real':      # train the classifier on real data
             loss_cls_on_real, r_data = self._train_epoch_classifier_on_real()
-
-        # (4/4) Finally, train the classifier on generated fake data
-        loss_cls_on_fake = None
-        if epoch >= 5:
-            loss_cls_on_fake, g_data = self._train_epoch_classifier_on_fake()
-
-        # return the metrics, and reset metrics as the epoch ends
-        metrics = self.model.get_metrics(reset=True)
-        metrics.update(loss_dis)
-        metrics.update(loss_gen)
-        if loss_cls_on_real:
+            metrics.update(self.model.get_metrics(reset=True))
             metrics.update(loss_cls_on_real)
-        if loss_cls_on_fake:
-            metrics.update(loss_cls_on_fake)
+            metrics.update({'r_data': r_data})
 
-        return metrics, r_data, g_data
+        elif train_phase == 'cls_on_fake':      # train the classifier on fake data
+            loss_cls_on_fake, g_data = self._train_epoch_classifier_on_fake()
+            metrics.update(loss_cls_on_fake)
+            metrics.update({'g_data': g_data})
+
+        else:
+            raise ValueError('unknown training phase name %s.' % train_phase)
+
+        return metrics
 
     def test(self) -> Dict[str, Any]:
         logger.info("### Testing ###")
@@ -366,35 +362,42 @@ class GanTrainer(TrainerBase):
         epochs_trained = 0
         training_start_time = time.time()
 
-        metrics['best_epoch'] = self._metric_tracker.best_epoch
-        for key, value in self._metric_tracker.best_epoch_metrics.items():
+        metrics['best_epoch'] = self._val_loss_tracker.best_epoch
+        for key, value in self._val_loss_tracker.best_epoch_metrics.items():
             metrics["best_validation_" + key] = value
 
         r_data_epochs = {}
         g_data_epochs = {}
+        d_loss_epochs = {}
+        g_loss_epochs = {}
+        cls_loss_on_real_epochs = {}
 
-        # train over epochs
+        train_phase = 'cls_on_real'
+
+        # train (over epochs)
         for epoch in range(self._num_epochs):
             epoch_start_time = time.time()
 
-            # train over one epoch
-            train_metrics, r_data, g_data = self._train_epoch(epoch)
+            # train (over one epoch)
+            train_metrics = self._train_epoch(epoch, train_phase)
 
-            if r_data is not None:
-                r_data_epochs[epoch] = r_data
-            if g_data is not None:
-                g_data_epochs[epoch] = g_data
+            if train_phase == 'cls_on_real':
+                r_data_epochs[epoch] = train_metrics['r_data']
+                cls_loss_on_real_epochs[epoch] = train_metrics['cls_loss_on_real']
 
-            # get peak of memory usage
-            if 'cpu_memory_MB' in train_metrics:
-                metrics['peak_cpu_memory_MB'] = max(metrics.get('peak_cpu_memory_MB', 0),
-                                                    train_metrics['cpu_memory_MB'])
-            for key, value in train_metrics.items():
-                if key.startswith('gpu_'):
-                    metrics["peak_" + key] = max(metrics.get("peak_" + key, 0), value)
+            elif train_phase == 'gan':
+                d_loss_epochs[epoch] = train_metrics['d_loss']
+                g_loss_epochs[epoch] = train_metrics['g_loss']
+                g_data_epochs[epoch] = train_metrics['g_data']
+
+            elif train_phase == 'cls_on_fake':
+                g_data_epochs[epoch] = train_metrics['g_data']
+
+            else:
+                raise ValueError('unknown training phase %s.' % train_phase)
 
             # Validation
-            if self._validation_dataset is not None:
+            if self._validation_dataset is not None and 'cls' in train_phase:
                 with torch.no_grad():
                     # We have a validation set, so compute all the metrics on it,
                     # and reset the metrics as validation ends.
@@ -403,11 +406,17 @@ class GanTrainer(TrainerBase):
 
                     # Check validation metric for early stopping
                     this_epoch_val_metric = val_metrics[self._validation_metric]
-                    self._metric_tracker.add_metric(this_epoch_val_metric)
+                    self._val_loss_tracker.add_metric(this_epoch_val_metric)
 
-                    if self._metric_tracker.should_stop_early():
-                        logger.info("Ran out of patience.  Stopping training.")
-                        break
+                    if self._val_loss_tracker.should_stop_early():
+                        logger.info("Ran out of patience.  Stopping training the classifier on real data.")
+                        # load best model
+                        best_model_state = self._checkpointer.best_model_state()
+                        if best_model_state:
+                            self.model.load_state_dict(best_model_state)
+                        # move to the next phase
+                        train_phase = 'gan'
+                        continue
 
             # Create overall metrics dict
             training_elapsed_time = time.time() - training_start_time
@@ -416,18 +425,18 @@ class GanTrainer(TrainerBase):
             metrics["epoch"] = epoch
 
             for key, value in train_metrics.items():
-                metrics["training_" + key] = value
+                if key != 'r_data' and key != 'g_data':
+                    metrics["training_" + key] = value
             for key, value in val_metrics.items():
                 metrics["validation_" + key] = value
 
-            if self._metric_tracker.is_best_so_far():
-                # Update all the best_ metrics.
-                # (Otherwise they just stay the same as they were.)
+            if self._val_loss_tracker.is_best_so_far():
+                # Update all the best_ metrics. Otherwise they just stay the same as they were.
                 metrics['best_epoch'] = epoch
                 for key, value in val_metrics.items():
                     metrics["best_validation_" + key] = value
 
-                self._metric_tracker.best_epoch_metrics = val_metrics
+                self._val_loss_tracker.best_epoch_metrics = val_metrics
 
             if self._serialization_dir:
                 dump_metrics(os.path.join(self._serialization_dir, f'metrics_epoch_{epoch}.json'), metrics)
@@ -455,7 +464,14 @@ class GanTrainer(TrainerBase):
         if best_model_state:
             self.model.load_state_dict(best_model_state)
 
-        return metrics, r_data_epochs, g_data_epochs
+        meta_data = {
+            'r_data_epochs': r_data_epochs,
+            'g_data_epochs': g_data_epochs,
+            'd_loss_epochs': d_loss_epochs,
+            'g_loss_epochs': g_loss_epochs,
+            'cls_loss_on_real_epochs': cls_loss_on_real_epochs
+        }
+        return metrics, meta_data
 
     def _validation_loss(self) -> Tuple[float, int]:
         """
@@ -500,7 +516,7 @@ class GanTrainer(TrainerBase):
         """
         # These are the training states we need to persist.
         training_states = {
-            "metric_tracker": self._metric_tracker.state_dict(),
+            "metric_tracker": self._val_loss_tracker.state_dict(),
             # "optimizer": self.optimizer.state_dict(),
             "batch_num_total": self._batch_num_total
         }
@@ -515,7 +531,7 @@ class GanTrainer(TrainerBase):
             model_state=self.model.state_dict(),
             epoch=epoch,
             training_states=training_states,
-            is_best_so_far=self._metric_tracker.is_best_so_far())
+            is_best_so_far=self._val_loss_tracker.is_best_so_far())
 
         # Restore the original values for parameters so that training will not be affected.
         # if self._moving_average is not None:

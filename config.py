@@ -151,5 +151,4 @@ class StanceConfig(DirConfig):
     test_raw_path = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-%s.txt')
     test_path = os.path.join(data_dir, 'test_%s.txt')
 
-    real_data_path = os.path.join(result_dir, 'r_data_%s.th')
-    gen_data_path = os.path.join(result_dir, 'g_data_%s.th')
+    train_meta_path = os.path.join(result_dir, 'train_meta_%s.th')
