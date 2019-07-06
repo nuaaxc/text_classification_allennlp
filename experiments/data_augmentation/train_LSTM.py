@@ -30,6 +30,7 @@ def experiment_stance():
                                                     'h', str(hparam['d_hidden']),
                                                     'dropout', str(hparam['dropout']),
                                                     'frac', str(hparam['file_frac'])])
+    n_epochs = config_file.hparam[stance_target]['epochs']
     n_classes = config_file.n_label
     batch_size = config_file.hparam[stance_target]['batch_size']
     lr = config_file.hparam[stance_target]['lr']
@@ -137,8 +138,8 @@ def experiment_stance():
                 },
                 "feed_forward": {
                     "input_dim": 2 * d_hidden,
-                    "num_layers": 2,
-                    "hidden_dims": [d_hidden, 1],
+                    "num_layers": 3,
+                    "hidden_dims": [d_hidden, d_hidden, 1],
                     "activations": "relu",
                     "dropout": dropout
                 },
@@ -156,27 +157,27 @@ def experiment_stance():
             "optimizer": {
                 "type": "gan",
                 "generator_optimizer": {
-                    "type": "adam",
-                    "lr": lr
+                    "type": "rmsprop",
+                    "lr": 0.00005
                 },
                 "discriminator_optimizer": {
-                    "type": "adam",
-                    "lr": lr
+                    "type": "rmsprop",
+                    "lr": 0.00005
                 },
                 "classifier_optimizer": {
                     "type": "adam",
-                    "lr": lr
+                    "lr": 0.0001
                 }
             },
-            "num_epochs": 100,
-            # "batches_per_epoch": 100,
+            "num_epochs": n_epochs,
             "batch_size": batch_size,
             "cuda_device": cuda_device,
             "patience": patience,
-            "num_loop_discriminator": 5,
-            "num_loop_generator": 1,
-            "num_loop_classifier_on_real": 100,
+            "num_loop_discriminator": 20,
+            "num_loop_generator": 4,
+            "num_loop_classifier_on_real": 50,
             "num_loop_classifier_on_fake": 10,
+            "clip_value": 1,
         })
 
     import tempfile

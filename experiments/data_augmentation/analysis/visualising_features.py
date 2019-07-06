@@ -35,8 +35,8 @@ if __name__ == '__main__':
     config_file = StanceConfig
     stance_target = 'a'
     train_meta_data = torch.load(config_file.train_meta_path % stance_target)
-    real_features = train_meta_data['r_data_epochs'][15]
-    gen_features = train_meta_data['g_data_epochs'][98]
+    real_features = train_meta_data['r_data_epochs'][19]
+    gen_features = train_meta_data['g_data_epochs'][499]
 
     colors = {
         0: 'red',

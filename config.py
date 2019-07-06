@@ -92,10 +92,10 @@ class StanceConfig(DirConfig):
 
     hparam = {
         'a': {
-            'lr': 0.0001,
-            'epochs': 999,
-            'patience': 7,
-            'batch_size': 8,
+            'lr': 0.00005,
+            'epochs': 500,
+            'patience': 5,
+            'batch_size': 16,
             'd_word_emb': 300,
             'd_rnn': 128,
             'd_hidden': 100,

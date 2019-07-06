@@ -78,6 +78,7 @@ class GanTrainer(TrainerBase):
                  num_loop_generator: int = 10,
                  num_loop_classifier_on_real: int = 10,
                  num_loop_classifier_on_fake: int = 10,
+                 clip_value: float = 1
                  ) -> None:
         super().__init__(serialization_dir, cuda_device)
 
@@ -111,6 +112,7 @@ class GanTrainer(TrainerBase):
         self.num_loop_classifier_on_fake = num_loop_classifier_on_fake
 
         self.cuda_device = cuda_device
+        self.clip_value = clip_value
 
     def _train_epoch_discriminator(self):
         logger.info('### Training discriminator ###')
@@ -144,20 +146,22 @@ class GanTrainer(TrainerBase):
             fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
 
             # Gradient penalty
-            # gradient_penalty = compute_gradient_penalty(self.model.discriminator,
-            #                                             features.data,
-            #                                             fake_data.data,
-            #                                             torch.randint_like(noise["label"], 0, 3),
-            #                                             self.cuda_device)
-            gradient_penalty = 0.
+            gradient_penalty = compute_gradient_penalty(self.model.discriminator,
+                                                        features.data,
+                                                        fake_data.data,
+                                                        torch.randint_like(noise["label"], 0, 3),
+                                                        self.cuda_device)
 
             d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
 
             d_error.backward()
+            self.optimizer.step()
+
+            # Clip weights of discriminator
+            for p in self.model.discriminator.parameters():
+                p.data.clamp_(-self.clip_value, self.clip_value)
 
             d_loss += d_error.item()
-
-            self.optimizer.step()
 
             # Update the description with the latest metrics
             loop.set_description(
@@ -194,10 +198,9 @@ class GanTrainer(TrainerBase):
 
             fake_error = generated["loss"]
             fake_error.backward()
-
-            g_loss += fake_error.mean().item()
-
             self.optimizer.step()
+
+            g_loss += fake_error.item()
 
             # Update the description with the latest metrics
             loop.set_description(
@@ -620,6 +623,7 @@ class GanTrainer(TrainerBase):
         num_loop_generator = params.pop_int("num_loop_generator")
         num_loop_classifier_on_real = params.pop_int("num_loop_classifier_on_real")
         num_loop_classifier_on_fake = params.pop_int("num_loop_classifier_on_fake")
+        clip_value = params.pop_int("clip_value")
 
         params.pop("trainer")
 
@@ -641,4 +645,5 @@ class GanTrainer(TrainerBase):
                    num_loop_discriminator=num_loop_discriminator,
                    num_loop_generator=num_loop_generator,
                    num_loop_classifier_on_real=num_loop_classifier_on_real,
-                   num_loop_classifier_on_fake=num_loop_classifier_on_fake)
+                   num_loop_classifier_on_fake=num_loop_classifier_on_fake,
+                   clip_value=clip_value)
