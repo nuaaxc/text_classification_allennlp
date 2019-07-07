@@ -152,3 +152,4 @@ class StanceConfig(DirConfig):
     test_path = os.path.join(data_dir, 'test_%s.txt')
 
     train_meta_path = os.path.join(result_dir, 'train_meta_%s.th')
+    img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')

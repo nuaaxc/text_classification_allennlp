@@ -4,12 +4,12 @@ import bokeh.plotting as bp
 from bokeh.io import show, export_png
 from sklearn.manifold import TSNE
 
-from config import StanceConfig
+from config import StanceConfig as ConfigFile
 
 random_state = 2019
 
 
-def visualise(x, color, labels):
+def visualise(x, epoch, color, labels, is_show=False, is_export=False):
     tsne_model = TSNE(n_components=2,
                       perplexity=50,
                       learning_rate=10,
@@ -20,7 +20,7 @@ def visualise(x, color, labels):
     tsne_points = tsne_model.fit_transform(x)
 
     plot = bp.figure(plot_width=300, plot_height=300,
-                     # title=DirConfig.model_name_dict[model_name],
+                     title='Epoch: %s' % epoch,
                      toolbar_location=None, tools="")
 
     plot.scatter(x=tsne_points[:, 0],
@@ -28,23 +28,27 @@ def visualise(x, color, labels):
                  size=2,
                  color=[color[label] for label in labels])
 
-    show(plot)
+    if is_show:
+        show(plot)
+
+    if is_export:
+        export_png(plot, filename=ConfigFile.img_gen_feature_path % epoch)
+        print('saved to %s.' % ConfigFile.img_gen_feature_path % epoch)
 
 
 if __name__ == '__main__':
-    config_file = StanceConfig
     stance_target = 'a'
-    train_meta_data = torch.load(config_file.train_meta_path % stance_target)
+    train_meta_data = torch.load(ConfigFile.train_meta_path % stance_target)
     real_features = train_meta_data['r_data_epochs'][19]
-    gen_features = train_meta_data['g_data_epochs'][499]
 
     colors = {
         0: 'red',
         1: 'blue'
     }
 
-    labels = [0] * real_features.shape[0] + \
-             [1] * gen_features.shape[0]
-    visualise(np.concatenate((real_features, gen_features)),
-              colors,
-              labels)
+    for epoch in train_meta_data['g_data_epochs'].keys():
+        gen_features = train_meta_data['g_data_epochs'][epoch]
+        labels = [0] * real_features.shape[0] + [1] * gen_features.shape[0]
+        visualise(np.concatenate((real_features, gen_features)),
+                  epoch, colors, labels,
+                  False, True)
