@@ -78,7 +78,8 @@ class GanTrainer(TrainerBase):
                  num_loop_generator: int = 10,
                  num_loop_classifier_on_real: int = 10,
                  num_loop_classifier_on_fake: int = 10,
-                 clip_value: float = 1
+                 clip_value: float = 1,
+                 no_gen: bool=False,
                  ) -> None:
         super().__init__(serialization_dir, cuda_device)
 
@@ -113,6 +114,7 @@ class GanTrainer(TrainerBase):
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
+        self.no_gen = no_gen
 
     def _train_epoch_discriminator(self):
         logger.info('### Training discriminator ###')
@@ -256,6 +258,10 @@ class GanTrainer(TrainerBase):
 
         self.optimizer.stage = 'classifier'
 
+        # freeze feature_extractor
+        for p in self.model.feature_extractor.parameters():
+            p.requires_grad = False
+
         noise_iterator = self.noise_iterator(self.noise_dataset)
         loop = Tqdm.tqdm(range(self.num_loop_classifier_on_fake))
 
@@ -379,6 +385,10 @@ class GanTrainer(TrainerBase):
 
         # train (over epochs)
         for epoch in range(self._num_epochs):
+
+            if epoch > 450:
+                train_phase = 'cls_on_fake'
+
             epoch_start_time = time.time()
 
             # train (over one epoch)
@@ -411,15 +421,28 @@ class GanTrainer(TrainerBase):
                     this_epoch_val_metric = val_metrics[self._validation_metric]
                     self._val_loss_tracker.add_metric(this_epoch_val_metric)
 
-                    if self._val_loss_tracker.should_stop_early():
-                        logger.info("Ran out of patience.  Stopping training the classifier on real data.")
+                    # stop cls_on_real phase
+                    if self._val_loss_tracker.should_stop_early() and 'real' in train_phase:
+                        logger.info("Ran out of patience. Stopping training the classifier on real data.")
+                        if self.no_gen:
+                            break
                         # load best model
                         best_model_state = self._checkpointer.best_model_state()
                         if best_model_state:
                             self.model.load_state_dict(best_model_state)
-                        # move to the next phase
+                        # move to the next phase (gan)
                         train_phase = 'gan'
+                        # reset metric tracker
+                        self._val_loss_tracker.clear()
                         continue
+                    # stop cls_on_real phase
+                    elif self._val_loss_tracker.should_stop_early() and 'fake' in train_phase:
+                        logger.info("Ran out of patience. Stopping training the classifier on fake data.")
+                        # load best model
+                        # best_model_state = self._checkpointer.best_model_state()
+                        # if best_model_state:
+                        #     self.model.load_state_dict(best_model_state)
+                        break
 
             # Create overall metrics dict
             training_elapsed_time = time.time() - training_start_time
@@ -430,16 +453,18 @@ class GanTrainer(TrainerBase):
             for key, value in train_metrics.items():
                 if key != 'r_data' and key != 'g_data':
                     metrics["training_" + key] = value
-            for key, value in val_metrics.items():
-                metrics["validation_" + key] = value
 
-            if self._val_loss_tracker.is_best_so_far():
-                # Update all the best_ metrics. Otherwise they just stay the same as they were.
-                metrics['best_epoch'] = epoch
+            if 'cls' in train_phase:
+
                 for key, value in val_metrics.items():
-                    metrics["best_validation_" + key] = value
+                    metrics["validation_" + key] = value
 
-                self._val_loss_tracker.best_epoch_metrics = val_metrics
+                if self._val_loss_tracker.is_best_so_far():
+                    metrics['best_epoch'] = epoch
+                    for key, value in val_metrics.items():
+                        metrics["best_validation_" + key] = value
+
+                    self._val_loss_tracker.best_epoch_metrics = val_metrics
 
             if self._serialization_dir:
                 dump_metrics(os.path.join(self._serialization_dir, f'metrics_epoch_{epoch}.json'), metrics)
@@ -624,6 +649,7 @@ class GanTrainer(TrainerBase):
         num_loop_classifier_on_real = params.pop_int("num_loop_classifier_on_real")
         num_loop_classifier_on_fake = params.pop_int("num_loop_classifier_on_fake")
         clip_value = params.pop_int("clip_value")
+        no_gen = params.pop_int("no_gen")
 
         params.pop("trainer")
 
@@ -646,4 +672,5 @@ class GanTrainer(TrainerBase):
                    num_loop_generator=num_loop_generator,
                    num_loop_classifier_on_real=num_loop_classifier_on_real,
                    num_loop_classifier_on_fake=num_loop_classifier_on_fake,
-                   clip_value=clip_value)
+                   clip_value=clip_value,
+                   no_gen=no_gen)
