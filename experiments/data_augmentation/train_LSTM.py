@@ -178,8 +178,8 @@ def experiment_stance():
             "num_loop_classifier_on_real": 100,
             "num_loop_classifier_on_fake": 500,
             "clip_value": 1,
-            # 'no_gen': True,
-            'no_gen': False,
+            'no_gen': True,
+            # 'no_gen': False,
         })
 
     import tempfile
