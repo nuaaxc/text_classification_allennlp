@@ -21,7 +21,7 @@ np.random.seed(2019)
 
 def experiment_stance():
     config_file = StanceConfig
-    stance_target = 'cc'
+    stance_target = 'la'
     hparam = config_file.hparam[stance_target]
     model_path = config_file.model_path % '_'.join(['tgt', stance_target,
                                                     'lambda', str(hparam['lambda']),
@@ -148,8 +148,8 @@ def experiment_stance():
                 "type": "classifier-base",
                 "feed_forward": {
                     "input_dim": d_hidden,
-                    "num_layers": 2,
-                    "hidden_dims": [d_hidden, 3],
+                    "num_layers": 3,
+                    "hidden_dims": [d_hidden, d_hidden, 3],
                     "activations": "relu",
                     "dropout": dropout
                 },
@@ -175,11 +175,11 @@ def experiment_stance():
             "patience": patience,
             "num_loop_discriminator": 20,
             "num_loop_generator": 4,
-            "num_loop_classifier_on_real": 100,
-            "num_loop_classifier_on_fake": 500,
+            "num_loop_classifier_on_real": 50,
+            "num_loop_classifier_on_fake": 100,
             "clip_value": 1,
-            'no_gen': True,
-            # 'no_gen': False,
+            # 'no_gen': True,
+            'no_gen': False,
         })
 
     import tempfile

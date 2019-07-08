@@ -39,7 +39,8 @@ def visualise(x, epoch, color, labels, is_show=False, is_export=False):
 
 def over_epoch(epoch_specified: List =None):
     # stance_target = 'a'
-    stance_target = 'cc'
+    # stance_target = 'cc'
+    stance_target = 'la'
     train_meta_data = torch.load(ConfigFile.train_meta_path % stance_target)
     real_features = train_meta_data['r_data_epochs'][19]
 

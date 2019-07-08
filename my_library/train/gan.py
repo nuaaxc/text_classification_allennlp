@@ -439,9 +439,9 @@ class GanTrainer(TrainerBase):
                     elif self._val_loss_tracker.should_stop_early() and 'fake' in train_phase:
                         logger.info("Ran out of patience. Stopping training the classifier on fake data.")
                         # load best model
-                        # best_model_state = self._checkpointer.best_model_state()
-                        # if best_model_state:
-                        #     self.model.load_state_dict(best_model_state)
+                        best_model_state = self._checkpointer.best_model_state()
+                        if best_model_state:
+                            self.model.load_state_dict(best_model_state)
                         break
 
             # Create overall metrics dict
@@ -488,9 +488,9 @@ class GanTrainer(TrainerBase):
             epochs_trained += 1
 
         # Load the best model state before returning
-        best_model_state = self._checkpointer.best_model_state()
-        if best_model_state:
-            self.model.load_state_dict(best_model_state)
+        # best_model_state = self._checkpointer.best_model_state()
+        # if best_model_state:
+        #     self.model.load_state_dict(best_model_state)
 
         meta_data = {
             'r_data_epochs': r_data_epochs,
