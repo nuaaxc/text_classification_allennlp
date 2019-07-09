@@ -78,7 +78,7 @@ def preprocess_word(word):
     word = re.sub(r'[-|\']', '', word)  # Remove - & '
     word = re.sub(
         r"""(?:^(?:never|no|nothing|nowhere|noone|none|not|havent|hasnt|hadnt|cant|couldnt|shouldnt|wont|wouldnt|dont|doesnt|didnt|isnt|arent|aint)$)|n't""",
-        'NEGATION', word)
+        'not', word)
     return word
 
 

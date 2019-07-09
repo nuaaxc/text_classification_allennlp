@@ -21,7 +21,7 @@ np.random.seed(2019)
 
 def experiment_stance():
     config_file = StanceConfig
-    stance_target = 'la'
+    stance_target = 'a'
     hparam = config_file.hparam[stance_target]
     model_path = config_file.model_path % '_'.join(['tgt', stance_target,
                                                     'lambda', str(hparam['lambda']),
@@ -176,7 +176,7 @@ def experiment_stance():
             "num_loop_discriminator": 20,
             "num_loop_generator": 4,
             "num_loop_classifier_on_real": 50,
-            "num_loop_classifier_on_fake": 100,
+            "num_loop_classifier_on_fake": 200,
             "clip_value": 1,
             # 'no_gen': True,
             'no_gen': False,

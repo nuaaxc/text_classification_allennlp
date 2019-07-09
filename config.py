@@ -95,14 +95,14 @@ class StanceConfig(DirConfig):
             'lr': 0.00005,
             'epochs': 1000,
             'patience': 10,
-            'batch_size': 16,
+            'batch_size': 9,
             'd_word_emb': 300,
             'd_rnn': 128,
             'd_hidden': 100,
             'dropout': 0.3,
             'lambda': 0,
             'cuda_device': 0,
-            'file_frac': 100,
+            'file_frac': 30,
         },
 
         'cc': {
