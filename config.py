@@ -123,11 +123,11 @@ class StanceConfig(DirConfig):
             'lr': 0.00005,
             'epochs': 1000,
             'patience': 10,
-            'batch_size': 16,
+            'batch_size': 8,
             'd_word_emb': 300,
             'd_rnn': 128,
             'd_hidden': 100,
-            'dropout': 0.3,
+            'dropout': 0.2,
             'lambda': 0,
             'cuda_device': 0,
             'file_frac': 100,
@@ -166,4 +166,5 @@ class StanceConfig(DirConfig):
     test_path = os.path.join(data_dir, 'test_%s.txt')
 
     train_meta_path = os.path.join(result_dir, 'train_meta_%s.th')
+    test_meta_path = os.path.join(result_dir, 'test_meta_%s.th')
     img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')

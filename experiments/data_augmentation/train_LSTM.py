@@ -21,7 +21,8 @@ np.random.seed(2019)
 
 def experiment_stance():
     config_file = StanceConfig
-    stance_target = 'a'
+    # stance_target = 'a'
+    stance_target = 'la'
     hparam = config_file.hparam[stance_target]
     model_path = config_file.model_path % '_'.join(['tgt', stance_target,
                                                     'lambda', str(hparam['lambda']),
@@ -158,11 +159,11 @@ def experiment_stance():
                 "type": "gan",
                 "generator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.00005
+                    "lr": 0.0001
                 },
                 "discriminator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.00005
+                    "lr": 0.0001
                 },
                 "classifier_optimizer": {
                     "type": "adam",
@@ -175,8 +176,8 @@ def experiment_stance():
             "patience": patience,
             "num_loop_discriminator": 20,
             "num_loop_generator": 4,
-            "num_loop_classifier_on_real": 50,
-            "num_loop_classifier_on_fake": 200,
+            "num_loop_classifier_on_real": 100,
+            "num_loop_classifier_on_fake": 100,
             "clip_value": 1,
             # 'no_gen': True,
             'no_gen': False,
@@ -186,14 +187,17 @@ def experiment_stance():
     serialization_dir_ = tempfile.mkdtemp()
     trainer_ = TrainerBase.from_params(params_, serialization_dir_)
 
-    train_metrics, meta_data = trainer_.train()
+    train_metrics, meta_data_train = trainer_.train()
     pprint(train_metrics)
-    test_metrics = trainer_.test()
+    test_metrics, meta_data_test = trainer_.test()
     pprint(test_metrics)
 
     # save training meta data
     print('saving training meta data ...')
-    torch.save(meta_data, config_file.train_meta_path % stance_target)
+    torch.save(meta_data_train, config_file.train_meta_path % stance_target)
+    print('saved.')
+    print('saving test meta data ...')
+    torch.save(meta_data_test, config_file.test_meta_path % stance_target)
     print('saved.')
 
 

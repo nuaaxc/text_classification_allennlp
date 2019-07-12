@@ -332,7 +332,7 @@ class GanTrainer(TrainerBase):
 
         return metrics
 
-    def test(self) -> Dict[str, Any]:
+    def test(self) -> Any:
         logger.info("### Testing ###")
         with torch.no_grad():
             self.model.eval()
@@ -346,10 +346,15 @@ class GanTrainer(TrainerBase):
             test_loss = 0.
             test_metrics = {}
 
+            r_data = []
+
             for batch in test_generator_tqdm:
                 # batch = batch[0]
                 batch = nn_util.move_to_device(batch, self._cuda_devices[0])
                 features = self.model.feature_extractor(batch['text'])
+
+                r_data.append(features.data.cpu().numpy())
+
                 cls_error = self.model.classifier(features, batch['label'])['loss']
 
                 batches_this_epoch += 1
@@ -360,7 +365,7 @@ class GanTrainer(TrainerBase):
                 description = training_util.description_from_metrics(test_metrics)
                 test_generator_tqdm.set_description(description, refresh=False)
 
-            return test_metrics
+            return test_metrics, np.vstack(r_data)
 
     def train(self) -> Any:
 

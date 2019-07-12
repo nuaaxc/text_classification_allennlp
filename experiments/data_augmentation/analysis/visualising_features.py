@@ -38,26 +38,30 @@ def visualise(x, epoch, color, labels, is_show=False, is_export=False):
 
 
 def over_epoch(epoch_specified: List =None):
-    stance_target = 'a'
+    # stance_target = 'a'
+    stance_target = 'la'
     # stance_target = 'cc'
     # stance_target = 'la'
     train_meta_data = torch.load(ConfigFile.train_meta_path % stance_target)
-    real_features = train_meta_data['r_data_epochs'][19]
+    real_train_features = train_meta_data['r_data_epochs'][15]
+    real_test_features = torch.load(ConfigFile.test_meta_path % stance_target)
 
     colors = {
-        0: 'red',
-        1: 'blue'
+        0: 'blue',
+        1: 'red',
+        2: 'green'
     }
     if epoch_specified is None:
         epoch_specified = train_meta_data['g_data_epochs'].keys()
 
     for epoch in epoch_specified:
         gen_features = train_meta_data['g_data_epochs'][epoch]
-        labels = [0] * real_features.shape[0] + [1] * gen_features.shape[0]
-        visualise(np.concatenate((real_features, gen_features)),
+        labels = [0] * real_train_features.shape[0] + [1] * gen_features.shape[0] + [2] * real_test_features.shape[0]
+        visualise(np.concatenate((real_train_features, gen_features, real_test_features)),
                   epoch, colors, labels,
                   False, True)
 
 
 if __name__ == '__main__':
-    over_epoch(list(range(200, 448)))
+    # over_epoch(list(range(451, 461)))
+    over_epoch()
