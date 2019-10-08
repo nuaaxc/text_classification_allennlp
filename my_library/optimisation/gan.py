@@ -54,6 +54,10 @@ class GanOptimizer(torch.optim.Optimizer):
         c_params = [("", param) for name, param in parameters
                     if hasattr(param, '_feature_extractor') or hasattr(param, '_classifier')]
 
+        assert len(g_params) > 0
+        assert len(d_params) > 0
+        assert len(c_params) > 0
+
         g_optimizer = Optimizer.from_params(g_params,
                                             params.pop("generator_optimizer"))
         d_optimizer = Optimizer.from_params(d_params,

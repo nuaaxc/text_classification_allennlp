@@ -30,7 +30,6 @@ from allennlp.training import util as training_util
 from my_library.optimisation import GanOptimizer
 from my_library.models.data_augmentation import Gan
 
-
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -79,7 +78,7 @@ class GanTrainer(TrainerBase):
                  num_loop_classifier_on_real: int = 10,
                  num_loop_classifier_on_fake: int = 10,
                  clip_value: float = 1,
-                 no_gen: bool=False,
+                 no_gen: bool = False,
                  ) -> None:
         super().__init__(serialization_dir, cuda_device)
 
@@ -190,7 +189,7 @@ class GanTrainer(TrainerBase):
             self.optimizer.zero_grad()
 
             noise = next(noise_iterator)
-            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
+            noise = nn_util.move_to_device(noise, self.cuda_device)
 
             generated = self.model.generator(noise["array"],
                                              noise["label"],
@@ -310,19 +309,19 @@ class GanTrainer(TrainerBase):
 
         metrics = {}
 
-        if train_phase == 'gan':              # train the GAN
+        if train_phase == 'gan':  # train the GAN
             loss_d, loss_g, g_data = self._train_gan()
             metrics.update(loss_d)
             metrics.update(loss_g)
             metrics.update({'g_data': g_data})
 
-        elif train_phase == 'cls_on_real':      # train the classifier on real data
+        elif train_phase == 'cls_on_real':  # train the classifier on real data
             loss_cls_on_real, r_data = self._train_epoch_classifier_on_real()
             metrics.update(self.model.get_metrics(reset=True))
             metrics.update(loss_cls_on_real)
             metrics.update({'r_data': r_data})
 
-        elif train_phase == 'cls_on_fake':      # train the classifier on fake data
+        elif train_phase == 'cls_on_fake':  # train the classifier on fake data
             loss_cls_on_fake, g_data = self._train_epoch_classifier_on_fake()
             metrics.update(loss_cls_on_fake)
             metrics.update({'g_data': g_data})
@@ -574,7 +573,10 @@ class GanTrainer(TrainerBase):
     def from_params(cls,  # type: ignore
                     params: Params,
                     serialization_dir: str,
-                    recover: bool = False) -> 'GanTrainer':
+                    recover: bool = False,
+                    cache_directory: str = None,
+                    cache_prefix: str = None
+                    ) -> 'GanTrainer':
 
         training_file = params.pop('training_file')
         dev_file = params.pop('dev_file')
@@ -612,22 +614,10 @@ class GanTrainer(TrainerBase):
         noise_iterator.index_with(vocab)
 
         # Model
-        feature_extractor = Model.from_params(params.pop("feature_extractor"), vocab=vocab)
-        generator = Model.from_params(params.pop("generator"), vocab=None)
-        discriminator = Model.from_params(params.pop("discriminator"), vocab=None)
-        classifier = Model.from_params(params.pop("classifier"))
-
-        if isinstance(cuda_device, list):
-            model_device = cuda_device[0]
-        else:
-            model_device = cuda_device
-        if model_device >= 0:
-            # Moving model to GPU here so that the optimizer state gets constructed on
-            # the right device.
-            feature_extractor = feature_extractor.cuda(model_device)
-            generator = generator.cuda(model_device)
-            discriminator = discriminator.cuda(model_device)
-            classifier = classifier.cuda(model_device)
+        feature_extractor = Model.from_params(params.pop("feature_extractor"), vocab=vocab).cuda(cuda_device)
+        generator = Model.from_params(params.pop("generator"), vocab=None).cuda(cuda_device)
+        discriminator = Model.from_params(params.pop("discriminator"), vocab=None).cuda(cuda_device)
+        classifier = Model.from_params(params.pop("classifier")).cuda(cuda_device)
 
         model = Gan(
             feature_extractor=feature_extractor,
@@ -637,14 +627,14 @@ class GanTrainer(TrainerBase):
         )
 
         # Optimize
-        parameters = [[n, p] for n, p in model.feature_extractor.named_parameters() if p.requires_grad] + \
-                     [[n, p] for n, p in model.generator.named_parameters() if p.requires_grad] + \
-                     [[n, p] for n, p in model.discriminator.named_parameters() if p.requires_grad] + \
-                     [[n, p] for n, p in model.classifier.named_parameters() if p.requires_grad]
+        parameters = []
+        for component in [
+                model.feature_extractor,
+                model.generator,
+                model.discriminator,
+                model.classifier]:
+            parameters += [[n, p] for n, p in component.named_parameters() if p.requires_grad]
         optimizer = GanOptimizer.from_params(parameters, params.pop("optimizer"))
-
-        # training_util.move_optimizer_to_cuda(generator_optimizer)
-        # training_util.move_optimizer_to_cuda(discriminator_optimizer)
 
         num_epochs = params.pop_int("num_epochs")
         batch_size = params.pop_int("batch_size")
