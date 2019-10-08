@@ -64,8 +64,10 @@ def clean_normal_text(string):
     string = re.sub(r"\s{2,}", " ", string)
     string = re.sub(r'[-|\']', '', string)
     string = re.sub(r'\b(\w+)( \1\b)+', r'\1', string)  # remove repeated words
-    string = re.sub(r'SEP', '[SEP]', string)
-    return string.strip()
+    # string = re.sub(r'SEP', '[SEP]', string)
+    string = re.sub(r'SEP', '.', string)
+
+    return string
 
 
 def is_valid_word(word):

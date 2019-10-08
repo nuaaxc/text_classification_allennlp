@@ -45,7 +45,7 @@ class Classifier(Model):
         metrics = {metric_name: metric.get_metric(reset)
                    for metric_name, metric in self.metrics.items()}
         fscore = metrics['f1']['fscore']
-        metrics['f1_fa'] = 0.5 * (fscore[0] + fscore[2])
-        metrics['f1_fan'] = np.mean(fscore)
+        # metrics['f1_fa'] = 0.5 * (fscore[0] + fscore[2])
+        metrics['f1_score'] = np.mean(fscore)
         del metrics['f1']
         return metrics

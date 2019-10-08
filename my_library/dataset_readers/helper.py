@@ -2,8 +2,8 @@ import os
 import random
 from collections import defaultdict
 
-from config import StanceConfig, YahooConfig
-from my_library.dataset_readers.clearn_text import clean_tweet_text
+from config import StanceConfig, YahooConfig, TRECConfig
+from my_library.dataset_readers.clearn_text import clean_tweet_text, clean_normal_text
 
 
 def train_dev_split(train_raw_path,
@@ -17,7 +17,8 @@ def train_dev_split(train_raw_path,
                     text_index,
                     skip_header,
                     clean_text,
-                    sample_ratio=0.1, split_ratio=0.9):
+                    sample_ratio=0.1,
+                    split_ratio=0.9):
     random.seed(2019)
     label_example = defaultdict(list)
     with open(train_raw_path, encoding=encoding) as f:
@@ -53,53 +54,55 @@ def train_dev_split(train_raw_path,
         all_examples = label_example[label]
         sampled_train = label_train_sample[label]
         sampled_dev = label_dev_sample[label]
-        assert len(set(sampled_train) & set(sampled_dev)) == 0
+        print('[Label]', label)
+        assert len(sampled_train)
+        assert len(sampled_dev)
+        print('training set size:', len(sampled_train))
+        print('development set size:', len(sampled_dev))
+        print('train-dev duplicates:', len(set(sampled_train) & set(sampled_dev)))
         assert len(set(sampled_train) & set(all_examples)) == len(set(sampled_train))
         assert len(set(sampled_dev) & set(all_examples)) == len(set(sampled_dev))
 
     """
     Saving to file
     """
-    print('saving sampled training set ...')
+    print('[saving] sampled training set ...')
     with open(train_ratio_path, 'w', encoding='utf-8') as f:
         for label, samples in label_train_sample.items():
             for sample in samples:
                 sample = clean_text(sample)
-                assert len(sample) > 0
-                f.write(label + '\t' + sample)
-                f.write('\n')
+                # assert len(sample) > 0
+                if len(sample) > 0:
+                    f.write(label + '\t' + sample)
+                    f.write('\n')
 
-    print('saving sampled dev set ...')
+    print('[saving] sampled dev set ...')
     with open(dev_ratio_path, 'w', encoding='utf-8') as f:
         for label, samples in label_dev_sample.items():
             for sample in samples:
                 sample = clean_text(sample)
-                assert len(sample) > 0
-                f.write(label + '\t' + sample)
-                f.write('\n')
-    if not os.path.exists(test_path):
-        print('saving test set ...')
-        with open(test_raw_path, 'r', encoding='utf-8') as f_test_raw, \
-                open(test_path, 'w', encoding='utf-8') as f_test:
-            if skip_header:
-                next(f_test_raw)
-            for line in f_test_raw:
-                label = line.strip().split(sep)[label_index]
-                text = line.strip().split(sep)[text_index]
-                text = clean_text(text)
-                assert len(text) > 0
+                # assert len(sample) > 0
+                if len(sample) > 0:
+                    f.write(label + '\t' + sample)
+                    f.write('\n')
+
+    print('[saving] test set ...')
+    with open(test_raw_path, 'r', encoding='utf-8') as f_test_raw, \
+            open(test_path, 'w', encoding='utf-8') as f_test:
+        if skip_header:
+            next(f_test_raw)
+        for line in f_test_raw:
+            label = line.strip().split(sep)[label_index]
+            text = line.strip().split(sep)[text_index]
+            text = clean_text(text)
+            # assert len(text) > 0
+            if len(text) > 0:
                 f_test.write(label + '\t' + text)
                 f_test.write('\n')
-    print('saved.')
+    print('[saved]')
 
 
-if __name__ == '__main__':
-    # train_dev_split(YahooConfig, sample_ratio=1) sep=,"
-    # train_dev_split(YahooConfig, sample_ratio=0.5)
-    # train_dev_split(YahooConfig, sample_ratio=0.1)
-    # train_dev_split(YahooConfig, sample_ratio=0.01)
-
-    # Stance data
+def dataset_stance():
     sample_ratio = 0.3
     stance_target = 'a'
     train_dev_split(train_raw_path=StanceConfig.train_raw_path % stance_target,
@@ -114,3 +117,23 @@ if __name__ == '__main__':
                     skip_header=True,
                     clean_text=clean_tweet_text,
                     sample_ratio=sample_ratio)
+
+
+def dataset_TREC(sample_ratio=0.2):
+
+    train_dev_split(train_raw_path=TRECConfig.train_norm_path,
+                    train_ratio_path=TRECConfig.train_ratio_path % int(sample_ratio * 100),
+                    dev_ratio_path=TRECConfig.dev_ratio_path % int(sample_ratio * 100),
+                    test_raw_path=TRECConfig.test_norm_path,
+                    test_path=TRECConfig.test_path % '100',
+                    encoding='windows-1251',
+                    sep='\t',
+                    label_index=0,
+                    text_index=1,
+                    skip_header=False,
+                    clean_text=clean_normal_text,
+                    sample_ratio=sample_ratio)
+
+
+if __name__ == '__main__':
+    dataset_TREC()
