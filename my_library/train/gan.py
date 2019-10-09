@@ -222,6 +222,7 @@ class GanTrainer(TrainerBase):
         loop = Tqdm.tqdm(range(self.num_loop_classifier_on_real))
 
         r_data = []
+        r_label = []
 
         for _ in loop:
             batches_this_loop += 1
@@ -234,6 +235,7 @@ class GanTrainer(TrainerBase):
             features = self.model.feature_extractor(batch['text'])
 
             r_data.append(features.data.cpu().numpy())
+            r_label.extend(batch['label'].data.cpu().numpy())
 
             cls_error = self.model.classifier(features, batch['label'])['loss']
             cls_error.backward()
@@ -247,7 +249,7 @@ class GanTrainer(TrainerBase):
                 training_util.description_from_metrics({'cls_loss_on_real': cls_loss / batches_this_loop}),
                 refresh=False
             )
-        return {'cls_loss_on_real': cls_loss / batches_this_loop}, np.vstack(r_data)
+        return {'cls_loss_on_real': cls_loss / batches_this_loop}, np.vstack(r_data), r_label
 
     def _train_epoch_classifier_on_fake(self):
         logger.info('### Training classifier on fake data ###')
@@ -316,10 +318,11 @@ class GanTrainer(TrainerBase):
             metrics.update({'g_data': g_data})
 
         elif train_phase == 'cls_on_real':  # train the classifier on real data
-            loss_cls_on_real, r_data = self._train_epoch_classifier_on_real()
+            loss_cls_on_real, r_data, r_label = self._train_epoch_classifier_on_real()
             metrics.update(self.model.get_metrics(reset=True))
             metrics.update(loss_cls_on_real)
             metrics.update({'r_data': r_data})
+            metrics.update({'r_label': r_label})
 
         elif train_phase == 'cls_on_fake':  # train the classifier on fake data
             loss_cls_on_fake, g_data = self._train_epoch_classifier_on_fake()
@@ -399,7 +402,7 @@ class GanTrainer(TrainerBase):
             train_metrics = self._train_epoch(epoch, train_phase)
 
             if train_phase == 'cls_on_real':
-                r_data_epochs[epoch] = train_metrics['r_data']
+                r_data_epochs[epoch] = (train_metrics['r_data'], train_metrics['r_label'])
                 cls_loss_on_real_epochs[epoch] = train_metrics['cls_loss_on_real']
 
             elif train_phase == 'gan':

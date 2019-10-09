@@ -179,7 +179,7 @@ class TRECConfig(DirConfig):
         'lr': 0.0001,
         'epochs': 1000,
         'patience': 10,
-        'batch_size': 64,
+        'batch_size': 32,
         'd_word_emb': 300,
         'd_rnn': 128,
         'd_hidden': 768,
@@ -223,4 +223,4 @@ class TRECConfig(DirConfig):
 
     train_meta_path = os.path.join(result_dir, 'train_meta.th')
     test_meta_path = os.path.join(result_dir, 'test_meta.th')
-    img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature.png')
+    img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')

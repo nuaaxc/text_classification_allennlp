@@ -2,17 +2,19 @@ from typing import List
 import torch
 import numpy as np
 import bokeh.plotting as bp
+import bokeh.palettes as bpa
 from bokeh.io import show, export_png
 from sklearn.manifold import TSNE
 
-from config import StanceConfig as ConfigFile
+# from config import StanceConfig as ConfigFile
+from config import TRECConfig as ConfigFile
 
 random_state = 2019
 
 
 def visualise(x, epoch, color, labels, is_show=False, is_export=False):
     tsne_model = TSNE(n_components=2,
-                      perplexity=50,
+                      perplexity=100,
                       learning_rate=10,
                       verbose=1,
                       random_state=random_state,
@@ -20,13 +22,13 @@ def visualise(x, epoch, color, labels, is_show=False, is_export=False):
     # get coordinates for each tweet
     tsne_points = tsne_model.fit_transform(x)
 
-    plot = bp.figure(plot_width=300, plot_height=300,
+    plot = bp.figure(plot_width=600, plot_height=600,
                      title='Epoch: %s' % epoch,
                      toolbar_location=None, tools="")
 
     plot.scatter(x=tsne_points[:, 0],
                  y=tsne_points[:, 1],
-                 size=1,
+                 size=10,
                  color=[color[label] for label in labels])
 
     if is_show:
@@ -62,6 +64,27 @@ def over_epoch(epoch_specified: List =None):
                   False, True)
 
 
+def visualize_real_features():
+    train_meta_data = torch.load(ConfigFile.train_meta_path)
+    real_train_features = train_meta_data['r_data_epochs'][0]
+    print(real_train_features)
+    exit()
+    print(real_train_features.shape)
+
+    labels = [0] * real_train_features.shape[0]
+
+    for epoch in train_meta_data['r_data_epochs'].keys():
+        real_train_features = train_meta_data['r_data_epochs'][epoch]
+        print(real_train_features)
+
+        visualise(real_train_features,
+                  epoch=epoch,
+                  color=bpa.all_palettes['Accent'][6],
+                  labels=labels,
+                  is_show=False,
+                  is_export=True)
+
+
 if __name__ == '__main__':
     # over_epoch(list(range(451, 461)))
-    over_epoch()
+    visualize_real_features()
