@@ -152,7 +152,7 @@ def experiment_trec():
             "patience": patience,
             "num_loop_discriminator": 20,
             "num_loop_generator": 4,
-            "num_loop_classifier_on_real": 30,
+            "num_loop_classifier_on_real": 150,
             "num_loop_classifier_on_fake": 40,
             "clip_value": 1,
             'no_gen': True,

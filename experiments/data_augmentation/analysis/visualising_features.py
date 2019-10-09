@@ -12,9 +12,9 @@ from config import TRECConfig as ConfigFile
 random_state = 2019
 
 
-def visualise(x, epoch, color, labels, is_show=False, is_export=False):
+def visualise(x, epoch, color, is_show=False, is_export=False):
     tsne_model = TSNE(n_components=2,
-                      perplexity=100,
+                      perplexity=50,
                       learning_rate=10,
                       verbose=1,
                       random_state=random_state,
@@ -28,8 +28,8 @@ def visualise(x, epoch, color, labels, is_show=False, is_export=False):
 
     plot.scatter(x=tsne_points[:, 0],
                  y=tsne_points[:, 1],
-                 size=10,
-                 color=[color[label] for label in labels])
+                 size=3,
+                 color=color)
 
     if is_show:
         show(plot)
@@ -66,21 +66,15 @@ def over_epoch(epoch_specified: List =None):
 
 def visualize_real_features():
     train_meta_data = torch.load(ConfigFile.train_meta_path)
-    real_train_features = train_meta_data['r_data_epochs'][0]
-    print(real_train_features)
-    exit()
-    print(real_train_features.shape)
-
-    labels = [0] * real_train_features.shape[0]
+    n_samples = train_meta_data['r_data_epochs'][0][0].shape[0]
 
     for epoch in train_meta_data['r_data_epochs'].keys():
         real_train_features = train_meta_data['r_data_epochs'][epoch]
-        print(real_train_features)
-
-        visualise(real_train_features,
+        r_data, r_label = real_train_features
+        colors = [bpa.all_palettes['Dark2'][6][label] for label in r_label]
+        visualise(r_data,
                   epoch=epoch,
-                  color=bpa.all_palettes['Accent'][6],
-                  labels=labels,
+                  color=colors,
                   is_show=False,
                   is_export=True)
 

@@ -186,7 +186,7 @@ class TRECConfig(DirConfig):
         'dropout': 0.5,
         'lambda': 0,
         'cuda_device': 0,
-        'file_frac': 10,
+        'file_frac': 100,
     }
 
     if 'C:' in DirConfig.home:
