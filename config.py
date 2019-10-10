@@ -176,14 +176,14 @@ class TRECConfig(DirConfig):
     max_seq_len = 30
 
     hparam = {
-        'lr': 0.0001,
+        'lr': 0.00001,
         'epochs': 1000,
         'patience': 10,
-        'batch_size': 32,
+        'batch_size': 16,
         'd_word_emb': 300,
         'd_rnn': 128,
         'd_hidden': 768,
-        'dropout': 0.5,
+        'dropout': 0.1,
         'lambda': 0,
         'cuda_device': 0,
         'file_frac': 100,
@@ -221,6 +221,6 @@ class TRECConfig(DirConfig):
     test_norm_path = os.path.join(data_dir, 'test_norm.txt')
     test_path = os.path.join(data_dir, 'test_%sp.txt')
 
-    train_meta_path = os.path.join(result_dir, 'train_meta.th')
-    test_meta_path = os.path.join(result_dir, 'test_meta.th')
+    train_meta_path = os.path.join(result_dir, 'train_meta_%s_%sp.th')
+    test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
     img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')

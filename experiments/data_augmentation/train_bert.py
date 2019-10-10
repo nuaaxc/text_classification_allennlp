@@ -87,7 +87,8 @@ def experiment_trec():
                 "type": "bert_encoder",
                 "bert_path": DirConfig.BERT_MODEL,
                 "dropout": dropout,
-                "trainable": False
+                # "trainable": False
+                "trainable": True
             },
             "generator": {
                 "type": "generator-base",
@@ -152,7 +153,7 @@ def experiment_trec():
             "patience": patience,
             "num_loop_discriminator": 20,
             "num_loop_generator": 4,
-            "num_loop_classifier_on_real": 150,
+            "num_loop_classifier_on_real": 300,
             "num_loop_classifier_on_fake": 40,
             "clip_value": 1,
             'no_gen': True,
@@ -169,11 +170,16 @@ def experiment_trec():
     pprint(test_metrics)
 
     # save training meta data
-    print('saving training meta data ...')
-    torch.save(meta_data_train, config_file.train_meta_path)
+    print('[saving] training meta data ...')
+    torch.save(meta_data_train,
+               config_file.train_meta_path % (config_file.corpus_name,
+                                              hparam['file_frac']))
     print('saved.')
-    print('saving test meta data ...')
-    torch.save(meta_data_test, config_file.test_meta_path)
+
+    print('[saving] test meta data ...')
+    torch.save(meta_data_test,
+               config_file.test_meta_path % (config_file.corpus_name,
+                                             hparam['file_frac']))
     print('saved.')
 
 

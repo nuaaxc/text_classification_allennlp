@@ -64,8 +64,8 @@ def over_epoch(epoch_specified: List =None):
                   False, True)
 
 
-def visualize_real_features():
-    train_meta_data = torch.load(ConfigFile.train_meta_path)
+def visualize_real_features(meta_path, corpus_name, file_frac):
+    train_meta_data = torch.load(meta_path % (corpus_name, file_frac))
     n_samples = train_meta_data['r_data_epochs'][0][0].shape[0]
 
     for epoch in train_meta_data['r_data_epochs'].keys():
@@ -80,5 +80,6 @@ def visualize_real_features():
 
 
 if __name__ == '__main__':
-    # over_epoch(list(range(451, 461)))
-    visualize_real_features()
+    visualize_real_features(ConfigFile.train_meta_path,
+                            ConfigFile.corpus_name,
+                            ConfigFile.hparam['file_frac'])

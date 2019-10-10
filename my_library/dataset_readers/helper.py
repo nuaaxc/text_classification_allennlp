@@ -119,7 +119,7 @@ def dataset_stance():
                     sample_ratio=sample_ratio)
 
 
-def dataset_TREC(sample_ratio=0.1):
+def dataset_TREC(sample_ratio):
 
     train_dev_split(train_raw_path=TRECConfig.train_norm_path,
                     train_ratio_path=TRECConfig.train_ratio_path % int(sample_ratio * 100),
@@ -136,4 +136,4 @@ def dataset_TREC(sample_ratio=0.1):
 
 
 if __name__ == '__main__':
-    dataset_TREC()
+    dataset_TREC(sample_ratio=0.05)
