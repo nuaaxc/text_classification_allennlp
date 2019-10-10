@@ -38,6 +38,7 @@ def experiment_trec():
     dropout = hparam['dropout']
     cuda_device = hparam['cuda_device']
     patience = hparam['patience']
+    batch_per_epoch = hparam['batch_per_epoch']
 
     params_ = Params(
         {
@@ -74,6 +75,7 @@ def experiment_trec():
             "training_iterator": {
                 "type": "bucket",
                 "batch_size": batch_size,
+                "instances_per_epoch": batch_per_epoch * batch_size,
                 "sorting_keys": [('text', 'num_tokens')],
                 "track_epoch": False
             },
@@ -153,11 +155,11 @@ def experiment_trec():
             "patience": patience,
             "num_loop_discriminator": 20,
             "num_loop_generator": 4,
-            "num_loop_classifier_on_real": 300,
+            "num_loop_classifier_on_real": batch_per_epoch,
             "num_loop_classifier_on_fake": 40,
             "clip_value": 1,
-            'no_gen': True,
-            # 'no_gen': False,
+            # 'no_gen': True,
+            'no_gen': False,
         })
 
     import tempfile

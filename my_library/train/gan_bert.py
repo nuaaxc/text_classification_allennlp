@@ -35,24 +35,26 @@ from my_library.models.data_augmentation import Gan
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def compute_gradient_penalty(D, real_samples, fake_samples, labels, cuda_device):
+def compute_gradient_penalty(D, h_real, h_fake, labels, cuda_device):
     """Calculates the gradient penalty loss for WGAN GP"""
-    # Random weight term for interpolation between real and fake samples
-    alpha = torch.rand(real_samples.size(0), 1, dtype=torch.float32).cuda(cuda_device)
-    # Get random interpolation between real and fake samples
-    interpolates = (alpha * real_samples + (1 - alpha) * fake_samples).requires_grad_(True)
-    fake = torch.ones((real_samples.size(0), 1), requires_grad=False).cuda(cuda_device)
+
+    alpha = torch.rand(h_real.size(0), 1).cuda(cuda_device)
+    differences = h_fake - h_real
+    interpolates = h_real + (alpha * differences)
+    interpolates = interpolates.cuda(cuda_device).requires_grad_()
     d_interpolates = D(interpolates, labels)["output"]
+
     # Get gradient w.r.t. interpolates
     gradients = torch.autograd.grad(
         outputs=d_interpolates,
         inputs=interpolates,
-        grad_outputs=fake,
+        grad_outputs=torch.ones_like(d_interpolates),
         create_graph=True,
         retain_graph=True,
         only_inputs=True,
     )[0]
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    gradients_norm = torch.sqrt(torch.sum(gradients ** 2, dim=1) + 1e-12)
+    gradient_penalty = ((gradients_norm - 1) ** 2).mean()
     return gradient_penalty
 
 
@@ -137,8 +139,8 @@ class GanBertTrainer(TrainerBase):
             batch = next(data_iterator)
             noise = next(noise_iterator)
 
-            batch = nn_util.move_to_device(batch, self._cuda_devices[0])
-            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
+            batch = nn_util.move_to_device(batch, self.cuda_device)
+            noise = nn_util.move_to_device(noise, self.cuda_device)
 
             # Real example
             features = self.model.feature_extractor(batch['text'])
@@ -152,7 +154,7 @@ class GanBertTrainer(TrainerBase):
             gradient_penalty = compute_gradient_penalty(self.model.discriminator,
                                                         features.data,
                                                         fake_data.data,
-                                                        torch.randint_like(noise["label"], 0, 3),
+                                                        torch.randint_like(noise["label"], 0, 6),
                                                         self.cuda_device)
 
             d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
@@ -473,7 +475,8 @@ class GanBertTrainer(TrainerBase):
             # if self._momentum_scheduler:
             #     self._momentum_scheduler.step(this_epoch_val_metric, epoch)
 
-            self._save_checkpoint(epoch)
+            if 'cls' in train_phase:
+                self._save_checkpoint(epoch)
 
             epoch_elapsed_time = time.time() - epoch_start_time
             logger.info("Epoch duration: %s", datetime.timedelta(seconds=epoch_elapsed_time))

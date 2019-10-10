@@ -178,15 +178,16 @@ class TRECConfig(DirConfig):
     hparam = {
         'lr': 0.00001,
         'epochs': 1000,
-        'patience': 10,
+        'patience': 1,
         'batch_size': 16,
+        'batch_per_epoch': 20,
         'd_word_emb': 300,
         'd_rnn': 128,
         'd_hidden': 768,
         'dropout': 0.1,
         'lambda': 0,
         'cuda_device': 0,
-        'file_frac': 100,
+        'file_frac': 5,
     }
 
     if 'C:' in DirConfig.home:
