@@ -75,14 +75,15 @@ class GanBertTrainer(TrainerBase):
                  batch_size: int = 16,
                  cuda_device: int = 0,
                  patience: int = 5,
+                 n_epoch_gan: int = 100,
                  num_serialized_models_to_keep: int = 1,
                  keep_serialized_model_every_num_seconds: int = None,
-                 num_loop_discriminator: int = 10,
-                 num_loop_generator: int = 10,
-                 num_loop_classifier_on_real: int = 10,
+                 num_loop_discriminator: int = 5,
+                 batch_per_epoch: int = 10,
                  num_loop_classifier_on_fake: int = 10,
                  clip_value: float = 1,
-                 no_gen: bool = False,
+                 n_classes: int = 0,
+                 phase: str = None,
                  ) -> None:
         super().__init__(serialization_dir, cuda_device)
 
@@ -101,6 +102,7 @@ class GanBertTrainer(TrainerBase):
 
         self._num_epochs = num_epochs
         self._batch_size = batch_size
+        self.n_classes = n_classes
 
         self._val_loss_tracker = MetricTracker(patience, validation_metric)
         self._g_loss_tracker = MetricTracker(3, validation_metric)
@@ -110,112 +112,75 @@ class GanBertTrainer(TrainerBase):
                                           keep_serialized_model_every_num_seconds,
                                           num_serialized_models_to_keep)
         self._batch_num_total = 0
+        self.n_epoch_gan = n_epoch_gan
         self.num_loop_discriminator = num_loop_discriminator
-        self.num_loop_generator = num_loop_generator
-        self.num_loop_classifier_on_real = num_loop_classifier_on_real
+        self.batch_per_epoch = batch_per_epoch
         self.num_loop_classifier_on_fake = num_loop_classifier_on_fake
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
-        self.no_gen = no_gen
+        self.phase = phase
 
-    def _train_epoch_discriminator(self):
-        logger.info('### Training discriminator ###')
+    def get_phase(self):
+        return self.phase
 
-        d_loss = 0.0
-        batches_this_loop = 0
+    def _train_discriminator(self, batch, noise):
+        # logger.info('### Training discriminator ###')
 
         self.optimizer.stage = 'discriminator'
+        self.optimizer.zero_grad()
 
-        data_iterator = self.data_iterator(self.train_dataset)
-        noise_iterator = self.noise_iterator(self.noise_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_discriminator), total=self.num_loop_discriminator)
+        for p in self.model.discriminator.parameters():  # reset requires_grad
+            p.requires_grad = True  # they are set to False below in netG update
 
-        for _ in loop:
-            batches_this_loop += 1
+        # Real example
+        features = self.model.feature_extractor(batch['text'])
+        real_validity = self.model.discriminator(features, batch['label'])["output"]
 
-            self.optimizer.zero_grad()
+        # Fake example
+        fake_data = self.model.generator(noise["array"], noise["label"])["output"].detach()
+        fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
 
-            batch = next(data_iterator)
-            noise = next(noise_iterator)
+        # Gradient penalty
+        gradient_penalty = compute_gradient_penalty(self.model.discriminator,
+                                                    features.data,
+                                                    fake_data.data,
+                                                    torch.randint_like(noise["label"], 0, self.n_classes),
+                                                    self.cuda_device)
 
-            batch = nn_util.move_to_device(batch, self.cuda_device)
-            noise = nn_util.move_to_device(noise, self.cuda_device)
+        # d_error = -torch.mean(real_validity) + torch.mean(fake_validity)
+        d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 100 * gradient_penalty
 
-            # Real example
-            features = self.model.feature_extractor(batch['text'])
-            real_validity = self.model.discriminator(features, batch['label'])["output"]
+        d_error.backward()
+        self.optimizer.step()
 
-            # Fake example
-            fake_data = self.model.generator(noise["array"], noise["label"])["output"]
-            fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
+        # Clip weights of discriminator
+        # for p in self.model.discriminator.parameters():
+        #     p.data.clamp_(-self.clip_value, self.clip_value)
 
-            # Gradient penalty
-            gradient_penalty = compute_gradient_penalty(self.model.discriminator,
-                                                        features.data,
-                                                        fake_data.data,
-                                                        torch.randint_like(noise["label"], 0, 6),
-                                                        self.cuda_device)
+        return d_error.item()
 
-            d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
-
-            d_error.backward()
-            self.optimizer.step()
-
-            # Clip weights of discriminator
-            for p in self.model.discriminator.parameters():
-                p.data.clamp_(-self.clip_value, self.clip_value)
-
-            d_loss += d_error.item()
-
-            # Update the description with the latest metrics
-            loop.set_description(
-                training_util.description_from_metrics({'d_loss': d_loss / batches_this_loop}),
-                refresh=False
-            )
-        return {'d_loss': d_loss / batches_this_loop}
-
-    def _train_epoch_generator(self):
-        logger.info('### Training generator ###')
-
-        g_loss = 0.0
-        batches_this_loop = 0
+    def _train_generator(self, noise):
+        # logger.info('### Training generator ###')
 
         self.optimizer.stage = 'generator'
-        noise_iterator = self.noise_iterator(self.noise_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_generator))
+        self.optimizer.zero_grad()
 
-        g_data = []
+        for p in self.model.discriminator.parameters():
+            p.requires_grad = False
 
-        for _ in loop:
-            batches_this_loop += 1
+        generated = self.model.generator(noise["array"],
+                                         noise["label"],
+                                         self.model.discriminator)
 
-            self.optimizer.zero_grad()
+        fake_error = generated["loss"]
+        fake_error.backward()
+        self.optimizer.step()
 
-            noise = next(noise_iterator)
-            noise = nn_util.move_to_device(noise, self.cuda_device)
+        return fake_error.item()
 
-            generated = self.model.generator(noise["array"],
-                                             noise["label"],
-                                             self.model.discriminator)
-
-            g_data.append(generated["output"].data.cpu().numpy())
-
-            fake_error = generated["loss"]
-            fake_error.backward()
-            self.optimizer.step()
-
-            g_loss += fake_error.item()
-
-            # Update the description with the latest metrics
-            loop.set_description(
-                training_util.description_from_metrics({'g_loss': g_loss / batches_this_loop}),
-                refresh=False
-            )
-        return {'g_loss': g_loss / batches_this_loop}, np.vstack(g_data)
-
-    def _train_epoch_classifier_on_real(self):
-        logger.info('### Training classifier on real data ###')
+    def _train_epoch_on_real(self):
+        logger.info('### Training on real data ###')
 
         cls_loss = 0.
         batches_this_loop = 0
@@ -223,7 +188,7 @@ class GanBertTrainer(TrainerBase):
         self.optimizer.stage = 'classifier'
 
         data_iterator = self.data_iterator(self.train_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_classifier_on_real))
+        loop = Tqdm.tqdm(range(self.batch_per_epoch))
 
         r_data = []
         r_label = []
@@ -255,16 +220,16 @@ class GanBertTrainer(TrainerBase):
             )
         return {'cls_loss_on_real': cls_loss / batches_this_loop}, np.vstack(r_data), r_label
 
-    def _train_epoch_classifier_on_fake(self):
-        logger.info('### Training classifier on fake data ###')
+    def _train_epoch_on_fake(self):
+        logger.info('### Training on fake data ###')
 
         cls_loss = 0.
         batches_this_loop = 0
 
         self.optimizer.stage = 'classifier'
 
-        # freeze feature_extractor
-        for p in self.model.feature_extractor.parameters():
+        # freeze generator
+        for p in self.model.generator.parameters():
             p.requires_grad = False
 
         noise_iterator = self.noise_iterator(self.noise_dataset)
@@ -303,72 +268,122 @@ class GanBertTrainer(TrainerBase):
             return {'cls_loss_on_fake': 0.}, np.vstack(g_data)
 
     def _train_gan(self) -> Any:
-        loss_d = self._train_epoch_discriminator()
-        loss_g, g_data = self._train_epoch_generator()
-        return loss_d, loss_g, g_data
+        data_iterator = self.data_iterator(self.train_dataset)
+        noise_iterator = self.noise_iterator(self.noise_dataset)
 
-    def _train_epoch(self, epoch: int, train_phase: str) -> Any:
+        loss_d = []
+        loss_g = []
+
+        # train on this epoch
+        for i in range(self.batch_per_epoch):
+
+            batch = next(data_iterator)
+            noise = next(noise_iterator)
+            batch = nn_util.move_to_device(batch, self.cuda_device)
+            noise = nn_util.move_to_device(noise, self.cuda_device)
+
+            _loss_d = self._train_discriminator(batch, noise)
+            loss_d.append(_loss_d)
+
+            if (i + 1) % self.num_loop_discriminator == 0:
+                _loss_g = self._train_generator(noise)
+                loss_g.append(_loss_g)
+
+        # generate samples
+        g_data = []
+        for i in range(self.batch_per_epoch):
+            noise = next(noise_iterator)
+            noise = nn_util.move_to_device(noise, self.cuda_device)
+            generated = self.model.generator(noise["array"],
+                                             noise["label"])['output']
+
+            g_data.append(generated.data.cpu().numpy())
+        return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data)
+
+    def _train_epoch(self, epoch: int) -> Any:
 
         logger.info("Epoch %d/%d", epoch, self._num_epochs - 1)
-        logger.info("Training phase: %s ..." % train_phase)
+        logger.info("Phase: %s ..." % self.phase)
         self.model.train()
 
         metrics = {}
 
-        if train_phase == 'gan':  # train the GAN
+        if self.phase == 'gan':  # train the GAN
             loss_d, loss_g, g_data = self._train_gan()
-            metrics.update(loss_d)
-            metrics.update(loss_g)
+            metrics.update({'d_loss': loss_d})
+            metrics.update({'g_loss': loss_g})
             metrics.update({'g_data': g_data})
+            logger.info('[d_loss] %s, [g_loss] %s' % (loss_d, loss_g))
 
-        elif train_phase == 'cls_on_real':  # train the classifier on real data
-            loss_cls_on_real, r_data, r_label = self._train_epoch_classifier_on_real()
+        elif self.phase == 'cls_on_real':  # train the classifier on real data
+            loss_cls_on_real, r_data, r_label = self._train_epoch_on_real()
             metrics.update(self.model.get_metrics(reset=True))
             metrics.update(loss_cls_on_real)
             metrics.update({'r_data': r_data})
             metrics.update({'r_label': r_label})
 
-        elif train_phase == 'cls_on_fake':  # train the classifier on fake data
-            loss_cls_on_fake, g_data = self._train_epoch_classifier_on_fake()
+        elif self.phase == 'cls_on_fake':  # train the classifier on fake data
+            loss_cls_on_fake, g_data = self._train_epoch_on_fake()
             metrics.update(loss_cls_on_fake)
             metrics.update({'g_data': g_data})
 
         else:
-            raise ValueError('unknown training phase name %s.' % train_phase)
+            raise ValueError('unknown training phase name %s.' % self.phase)
 
         return metrics
 
     def test(self) -> Any:
         logger.info("### Testing ###")
-        with torch.no_grad():
-            self.model.eval()
-            y_true = []
-            y_pred = []
-            r_data = []
+        logger.info('[Load best model] ...')
+        if self._serialization_dir:
+            best_model_state = self._checkpointer.best_model_state()
+            if best_model_state:
+                self.model.load_state_dict(best_model_state)
+                logger.info('[Loaded]')
 
-            for batch in self.data_iterator(self._test_dataset, num_epochs=1, shuffle=False):
-                batch = nn_util.move_to_device(batch, self.cuda_device)
-                features = self.model.feature_extractor(batch['text'])
+        if self.model:
 
-                r_data.append(features.data.cpu().numpy())
+            with torch.no_grad():
+                self.model.eval()
+                y_true = []
+                y_pred = []
+                r_data = []
 
-                y_ = self.model.classifier(features)['output']
+                for batch in self.data_iterator(self._test_dataset, num_epochs=1, shuffle=False):
+                    batch = nn_util.move_to_device(batch, self.cuda_device)
+                    features = self.model.feature_extractor(batch['text'])
 
-                y_true.extend(batch['label'].cpu().numpy())
-                y_pred.extend(y_.max(1)[1].cpu().numpy())
+                    r_data.append(features.data.cpu().numpy())
 
-            return {'micro': sklearn.metrics.f1_score(y_true, y_pred, average='micro'),
-                    'macro': sklearn.metrics.f1_score(y_true, y_pred, average='macro'),
-                    'accuracy': sklearn.metrics.accuracy_score(y_true, y_pred)}, np.vstack(r_data)
+                    y_ = self.model.classifier(features)['output']
+
+                    y_true.extend(batch['label'].cpu().numpy())
+                    y_pred.extend(y_.max(1)[1].cpu().numpy())
+
+                return {'micro': sklearn.metrics.f1_score(y_true, y_pred, average='micro'),
+                        'macro': sklearn.metrics.f1_score(y_true, y_pred, average='macro'),
+                        'accuracy': sklearn.metrics.accuracy_score(y_true, y_pred)}, np.vstack(r_data)
 
     def train(self) -> Any:
-
         logger.info("Beginning training.")
 
+        n_epochs = None
         val_metrics: Dict[str, float] = {}
         metrics: Dict[str, Any] = {}
         epochs_trained = 0
         training_start_time = time.time()
+
+        if self.phase == 'gan':
+            n_epochs = self.n_epoch_gan
+            logger.info('[Load best model] ...')
+            if self._serialization_dir:
+                best_model_state = self._checkpointer.best_model_state()
+                if best_model_state:
+                    self.model.load_state_dict(best_model_state)
+                    logger.info('[Loaded]')
+
+        if self.phase == 'cls_on_real':
+            n_epochs = self._num_epochs
 
         metrics['best_epoch'] = self._val_loss_tracker.best_epoch
         for key, value in self._val_loss_tracker.best_epoch_metrics.items():
@@ -380,36 +395,31 @@ class GanBertTrainer(TrainerBase):
         g_loss_epochs = {}
         cls_loss_on_real_epochs = {}
 
-        train_phase = 'cls_on_real'
-
-        # train (over epochs)
-        for epoch in range(self._num_epochs):
-
-            if epoch > 450:
-                train_phase = 'cls_on_fake'
+        # train over epochs
+        for epoch in range(n_epochs):
 
             epoch_start_time = time.time()
 
             # train (over one epoch)
-            train_metrics = self._train_epoch(epoch, train_phase)
+            train_metrics = self._train_epoch(epoch)
 
-            if train_phase == 'cls_on_real':
+            if self.phase == 'cls_on_real':
                 r_data_epochs[epoch] = (train_metrics['r_data'], train_metrics['r_label'])
                 cls_loss_on_real_epochs[epoch] = train_metrics['cls_loss_on_real']
 
-            elif train_phase == 'gan':
+            elif self.phase == 'gan':
                 d_loss_epochs[epoch] = train_metrics['d_loss']
                 g_loss_epochs[epoch] = train_metrics['g_loss']
                 g_data_epochs[epoch] = train_metrics['g_data']
 
-            elif train_phase == 'cls_on_fake':
+            elif self.phase == 'cls_on_fake':
                 g_data_epochs[epoch] = train_metrics['g_data']
 
             else:
-                raise ValueError('unknown training phase %s.' % train_phase)
+                raise ValueError('unknown training phase %s.' % self.phase)
 
             # Validation
-            if self._validation_dataset is not None and 'cls' in train_phase:
+            if self._validation_dataset is not None and 'cls' in self.phase:
                 with torch.no_grad():
                     # We have a validation set, so compute all the metrics on it,
                     # and reset the metrics as validation ends.
@@ -422,27 +432,8 @@ class GanBertTrainer(TrainerBase):
 
                     self._val_loss_tracker.add_metric(this_epoch_val_metric)
 
-                    # stop cls_on_real phase
-                    if self._val_loss_tracker.should_stop_early() and 'real' in train_phase:
-                        logger.info("Ran out of patience. Stopping training the classifier on real data.")
-                        if self.no_gen:
-                            break
-                        # load best model
-                        best_model_state = self._checkpointer.best_model_state()
-                        if best_model_state:
-                            self.model.load_state_dict(best_model_state)
-                        # move to the next phase (gan)
-                        train_phase = 'gan'
-                        # reset metric tracker
-                        self._val_loss_tracker.clear()
-                        continue
-                    # stop cls_on_real phase
-                    elif self._val_loss_tracker.should_stop_early() and 'fake' in train_phase:
-                        logger.info("Ran out of patience. Stopping training the classifier on fake data.")
-                        # load best model
-                        best_model_state = self._checkpointer.best_model_state()
-                        if best_model_state:
-                            self.model.load_state_dict(best_model_state)
+                    if self._val_loss_tracker.should_stop_early():
+                        logger.info("Ran out of patience. Stopping training on real data.")
                         break
 
             # Create overall metrics dict
@@ -455,7 +446,7 @@ class GanBertTrainer(TrainerBase):
                 if key != 'r_data' and key != 'g_data' and key != 'r_label':
                     metrics["training_" + key] = value
 
-            if 'cls' in train_phase:
+            if 'cls' in self.phase:
 
                 for key, value in val_metrics.items():
                     metrics["validation_" + key] = value
@@ -475,7 +466,7 @@ class GanBertTrainer(TrainerBase):
             # if self._momentum_scheduler:
             #     self._momentum_scheduler.step(this_epoch_val_metric, epoch)
 
-            if 'cls' in train_phase:
+            if 'cls' in self.phase:
                 self._save_checkpoint(epoch)
 
             epoch_elapsed_time = time.time() - epoch_start_time
@@ -621,12 +612,13 @@ class GanBertTrainer(TrainerBase):
         num_epochs = params.pop_int("num_epochs")
         batch_size = params.pop_int("batch_size")
         patience = params.pop_int("patience")
+        n_epoch_gan = params.pop_int("n_epoch_gan")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
-        num_loop_generator = params.pop_int("num_loop_generator")
-        num_loop_classifier_on_real = params.pop_int("num_loop_classifier_on_real")
+        batch_per_epoch = params.pop_int("batch_per_epoch")
         num_loop_classifier_on_fake = params.pop_int("num_loop_classifier_on_fake")
         clip_value = params.pop_int("clip_value")
-        no_gen = params.pop_int("no_gen")
+        n_classes = params.pop_int("n_classes")
+        phase = params.pop("phase")
 
         params.pop("trainer")
 
@@ -645,9 +637,10 @@ class GanBertTrainer(TrainerBase):
                    batch_size=batch_size,
                    cuda_device=cuda_device,
                    patience=patience,
+                   n_epoch_gan=n_epoch_gan,
                    num_loop_discriminator=num_loop_discriminator,
-                   num_loop_generator=num_loop_generator,
-                   num_loop_classifier_on_real=num_loop_classifier_on_real,
+                   batch_per_epoch=batch_per_epoch,
                    num_loop_classifier_on_fake=num_loop_classifier_on_fake,
                    clip_value=clip_value,
-                   no_gen=no_gen)
+                   n_classes=n_classes,
+                   phase=phase)

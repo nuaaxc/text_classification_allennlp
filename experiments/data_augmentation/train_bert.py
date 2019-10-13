@@ -1,5 +1,6 @@
 import logging
 import random
+import os
 import numpy as np
 from pprint import pprint
 import torch
@@ -22,19 +23,20 @@ np.random.seed(2019)
 def experiment_trec():
     config_file = TRECConfig
     hparam = config_file.hparam
-    model_path = config_file.model_path % '_'.join(['lambda', str(hparam['lambda']),
-                                                    'lr', str(hparam['lr']),
-                                                    'bs', str(hparam['batch_size']),
-                                                    'h', str(hparam['d_hidden']),
-                                                    'dropout', str(hparam['dropout']),
-                                                    'frac', str(hparam['file_frac'])])
+    model_dir = os.path.join(config_file.model_dir,
+                             '_'.join(['lr', str(hparam['lr']),
+                                       'bs', str(hparam['batch_size']),
+                                       'h', str(hparam['d_hidden']),
+                                       'dp', str(hparam['dropout']),
+                                       'frac', str(hparam['file_frac'])
+                                       ]))
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
     n_epochs = hparam['epochs']
     n_classes = config_file.n_label
     batch_size = hparam['batch_size']
     lr = hparam['lr']
-    d_word_emb = hparam['d_word_emb']
     d_hidden = hparam['d_hidden']
-    d_rnn = hparam['d_rnn']
     dropout = hparam['dropout']
     cuda_device = hparam['cuda_device']
     patience = hparam['patience']
@@ -138,11 +140,11 @@ def experiment_trec():
                 "type": "gan",
                 "generator_optimizer": {
                     "type": "rmsprop",
-                    "lr": lr
+                    "lr": 0.00005
                 },
                 "discriminator_optimizer": {
                     "type": "rmsprop",
-                    "lr": lr
+                    "lr": 0.00005
                 },
                 "classifier_optimizer": {
                     "type": "adam",
@@ -153,36 +155,49 @@ def experiment_trec():
             "batch_size": batch_size,
             "cuda_device": cuda_device,
             "patience": patience,
-            "num_loop_discriminator": 20,
-            "num_loop_generator": 4,
-            "num_loop_classifier_on_real": batch_per_epoch,
-            "num_loop_classifier_on_fake": 40,
+            "n_epoch_gan": 100,
+            "num_loop_discriminator": 5,
+            "batch_per_epoch": batch_per_epoch,
+            "num_loop_classifier_on_fake": 100,
             "clip_value": 1,
-            # 'no_gen': True,
-            'no_gen': False,
+            "n_classes": config_file.n_label,
+
+            # "phase": 'cls_on_real',
+            "phase": 'gan',
+            # "phase": 'cls_on_fake',
         })
 
     import tempfile
-    serialization_dir_ = tempfile.mkdtemp()
-    trainer_ = TrainerBase.from_params(params_, serialization_dir_)
-
+    # serialization_dir_ = tempfile.mkdtemp()
+    trainer_ = TrainerBase.from_params(params_, model_dir)
+    phase = trainer_.get_phase()
+    ###########
+    # Training
+    ###########
     train_metrics, meta_data_train = trainer_.train()
     pprint(train_metrics)
-    test_metrics, meta_data_test = trainer_.test()
-    pprint(test_metrics)
-
     # save training meta data
     print('[saving] training meta data ...')
-    torch.save(meta_data_train,
-               config_file.train_meta_path % (config_file.corpus_name,
-                                              hparam['file_frac']))
-    print('saved.')
 
-    print('[saving] test meta data ...')
-    torch.save(meta_data_test,
-               config_file.test_meta_path % (config_file.corpus_name,
-                                             hparam['file_frac']))
-    print('saved.')
+    if phase == 'cls_on_real':
+        torch.save(meta_data_train, config_file.train_real_meta_path % (config_file.corpus_name, hparam['file_frac']))
+    elif phase == 'gan':
+        torch.save(meta_data_train, config_file.train_gan_meta_path % (config_file.corpus_name, hparam['file_frac']))
+    elif phase == 'cls_on_fake':
+        torch.save(meta_data_train, config_file.train_fake_meta_path % (config_file.corpus_name, hparam['file_frac']))
+    else:
+        raise ValueError('unknown training phase name %s.' % phase)
+    print('[saved]')
+
+    #######
+    # Test
+    #######
+    if phase == 'cls_on_real' or phase == 'cls_on_fake':
+        test_metrics, meta_data_test = trainer_.test()
+        pprint(test_metrics)
+        print('[saving] test meta data ...')
+        torch.save(meta_data_test, config_file.test_meta_path % (config_file.corpus_name, hparam['file_frac']))
+        print('[saved]')
 
 
 if __name__ == '__main__':

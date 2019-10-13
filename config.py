@@ -177,15 +177,12 @@ class TRECConfig(DirConfig):
 
     hparam = {
         'lr': 0.00001,
-        'epochs': 1000,
+        'epochs': 2000,
         'patience': 1,
         'batch_size': 16,
         'batch_per_epoch': 20,
-        'd_word_emb': 300,
-        'd_rnn': 128,
         'd_hidden': 768,
         'dropout': 0.1,
-        'lambda': 0,
         'cuda_device': 0,
         'file_frac': 5,
     }
@@ -210,7 +207,6 @@ class TRECConfig(DirConfig):
     result_dir = os.path.join(root, 'results')
 
     vocab_path = os.path.join(cache_dir, 'vocab')
-    model_path = os.path.join(model_dir, 'model_%s.th')
 
     train_raw_path = os.path.join(data_dir, 'train.txt')
     train_norm_path = os.path.join(data_dir, 'train_norm.txt')
@@ -222,6 +218,8 @@ class TRECConfig(DirConfig):
     test_norm_path = os.path.join(data_dir, 'test_norm.txt')
     test_path = os.path.join(data_dir, 'test_%sp.txt')
 
-    train_meta_path = os.path.join(result_dir, 'train_meta_%s_%sp.th')
+    train_real_meta_path = os.path.join(result_dir, 'train_real_meta_%s_%sp.th')
+    train_gan_meta_path = os.path.join(result_dir, 'train_gan_meta_%s_%sp.th')
+    train_fake_meta_path = os.path.join(result_dir, 'train_fake_meta_%s_%sp.th')
     test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
     img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')

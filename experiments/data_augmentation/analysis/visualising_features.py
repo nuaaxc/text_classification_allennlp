@@ -39,7 +39,7 @@ def visualise(x, epoch, color, is_show=False, is_export=False):
         print('saved to %s.' % ConfigFile.img_gen_feature_path % epoch)
 
 
-def over_epoch(epoch_specified: List =None):
+def over_epoch(epoch_specified: List = None):
     # stance_target = 'a'
     stance_target = 'la'
     # stance_target = 'cc'
@@ -79,7 +79,33 @@ def visualize_real_features(meta_path, corpus_name, file_frac):
                   is_export=True)
 
 
+def visualize_gen_features(real_meta_path, gan_meta_path, corpus_name, file_frac):
+    real_meta_data = torch.load(real_meta_path % (corpus_name, file_frac))
+    real_train_features = real_meta_data['r_data_epochs'][19][0]
+
+    gan_meta_data = torch.load(gan_meta_path % (corpus_name, file_frac))
+
+    palettes = {
+        0: 'blue',
+        1: 'red',
+        2: 'green'
+    }
+
+    for epoch in gan_meta_data['g_data_epochs'].keys():
+        # if epoch < 300:
+        #     continue
+        gen_features = gan_meta_data['g_data_epochs'][epoch]
+        colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * gen_features.shape[0]
+        visualise(np.concatenate((real_train_features, gen_features)),
+                  epoch, colors,
+                  False, True)
+
+
 if __name__ == '__main__':
-    visualize_real_features(ConfigFile.train_meta_path,
-                            ConfigFile.corpus_name,
-                            ConfigFile.hparam['file_frac'])
+    # visualize_real_features(ConfigFile.train_meta_path,
+    #                         ConfigFile.corpus_name,
+    #                         ConfigFile.hparam['file_frac'])
+    visualize_gen_features(ConfigFile.train_real_meta_path,
+                           ConfigFile.train_gan_meta_path,
+                           ConfigFile.corpus_name,
+                           ConfigFile.hparam['file_frac'])
