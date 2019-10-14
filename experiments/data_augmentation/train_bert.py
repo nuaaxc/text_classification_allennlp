@@ -192,9 +192,10 @@ def experiment_trec(_phase):
 
             "batch_per_epoch": batch_per_epoch,
             "num_loop_discriminator": 5,
-            "num_loop_classifier_on_fake": 100,
+            "n_batch_fake": 50,
             "clip_value": 1,
             "n_classes": config_file.n_label,
+
             "phase": _phase,
             "model_real_dir": model_real_dir,
             "model_gan_dir": model_gan_dir,
@@ -234,7 +235,7 @@ def experiment_trec(_phase):
 
 
 if __name__ == '__main__':
-    # phase = 'cls_on_real'
-    phase = 'gan'
+    phase = 'cls_on_real'
+    # phase = 'gan'
     # phase = 'cls_on_fake'
     experiment_trec(phase)

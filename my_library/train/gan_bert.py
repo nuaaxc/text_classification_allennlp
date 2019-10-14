@@ -81,7 +81,7 @@ class GanBertTrainer(TrainerBase):
                  keep_serialized_model_every_num_seconds: int = None,
                  num_loop_discriminator: int = 5,
                  batch_per_epoch: int = 10,
-                 num_loop_classifier_on_fake: int = 10,
+                 n_batch_fake: int = 10,
                  clip_value: float = 1,
                  n_classes: int = 0,
                  phase: str = None,
@@ -121,7 +121,7 @@ class GanBertTrainer(TrainerBase):
         self._batch_num_total = 0
         self.num_loop_discriminator = num_loop_discriminator
         self.batch_per_epoch = batch_per_epoch
-        self.num_loop_classifier_on_fake = num_loop_classifier_on_fake
+        self.n_batch_fake = n_batch_fake
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
@@ -243,7 +243,7 @@ class GanBertTrainer(TrainerBase):
             p.requires_grad = False
 
         noise_iterator = self.noise_iterator(self.noise_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_classifier_on_fake))
+        loop = Tqdm.tqdm(range(self.n_batch_fake))
 
         g_data = []
 
@@ -253,7 +253,7 @@ class GanBertTrainer(TrainerBase):
             self.optimizer.zero_grad()
 
             noise = next(noise_iterator)
-            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
+            noise = nn_util.move_to_device(noise, self.cuda_device)
 
             generated = self.model.generator(noise["array"],
                                              noise["label"])['output']
@@ -384,7 +384,7 @@ class GanBertTrainer(TrainerBase):
 
         if self.phase == 'gan':
             self.n_epochs = self.n_epoch_gan
-            logger.info('[Load best model] ...')
+            logger.info('[Load real model] ...')
             best_model_state = torch.load(os.path.join(self.model_real_dir, 'best.th'))
             if best_model_state:
                 self.model.load_state_dict(best_model_state)
@@ -396,11 +396,10 @@ class GanBertTrainer(TrainerBase):
         if self.phase == 'cls_on_fake':
             self.n_epochs = self.n_epoch_fake
             logger.info('[Load gan model] ...')
-            if self._serialization_dir:
-                best_model_state = self._checkpointer.best_model_state()
-                if best_model_state:
-                    self.model.load_state_dict(best_model_state)
-                    logger.info('[Loaded]')
+            best_model_state = torch.load(os.path.join(self.model_gan_dir, 'best.th'))
+            if best_model_state:
+                self.model.load_state_dict(best_model_state)
+                logger.info('[Loaded]')
 
         r_data_epochs = {}
         g_data_epochs = {}
@@ -605,7 +604,7 @@ class GanBertTrainer(TrainerBase):
         patience = params.pop_int("patience")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
-        num_loop_classifier_on_fake = params.pop_int("num_loop_classifier_on_fake")
+        n_batch_fake = params.pop_int("n_batch_fake")
         clip_value = params.pop_int("clip_value")
         n_classes = params.pop_int("n_classes")
         phase = params.pop("phase")
@@ -633,7 +632,7 @@ class GanBertTrainer(TrainerBase):
                    patience=patience,
                    num_loop_discriminator=num_loop_discriminator,
                    batch_per_epoch=batch_per_epoch,
-                   num_loop_classifier_on_fake=num_loop_classifier_on_fake,
+                   n_batch_fake=n_batch_fake,
                    clip_value=clip_value,
                    n_classes=n_classes,
                    phase=phase,
