@@ -159,14 +159,14 @@ class GanBertTrainer(TrainerBase):
                                                     self.cuda_device)
 
         # d_error = -torch.mean(real_validity) + torch.mean(fake_validity)
-        d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 100 * gradient_penalty
+        d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 1 * gradient_penalty
 
         d_error.backward()
         self.optimizer.step()
 
         # Clip weights of discriminator
-        # for p in self.model.discriminator.parameters():
-        #     p.data.clamp_(-self.clip_value, self.clip_value)
+        for p in self.model.discriminator.parameters():
+            p.data.clamp_(-self.clip_value, self.clip_value)
 
         return d_error.item()
 

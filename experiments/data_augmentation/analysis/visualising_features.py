@@ -92,19 +92,19 @@ def visualize_gen_features(real_meta_path, gan_meta_path, fake_meta_path,
         2: 'green'
     }
 
-    # for epoch in gan_meta_data['g_data_epochs'].keys():
-    #     gen_features = gan_meta_data['g_data_epochs'][epoch]
-    #     colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * gen_features.shape[0]
-    #     visualise(np.concatenate((real_train_features, gen_features)),
-    #               epoch, colors,
-    #               False, True)
-
-    for epoch in fake_meta_data['g_data_epochs'].keys():
-        fake_features = fake_meta_data['g_data_epochs'][epoch]
-        colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * fake_features.shape[0]
-        visualise(np.concatenate((real_train_features, fake_features)),
+    for epoch in gan_meta_data['g_data_epochs'].keys():
+        gen_features = gan_meta_data['g_data_epochs'][epoch]
+        colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * gen_features.shape[0]
+        visualise(np.concatenate((real_train_features, gen_features)),
                   epoch, colors,
                   False, True)
+
+    # for epoch in fake_meta_data['g_data_epochs'].keys():
+    #     fake_features = fake_meta_data['g_data_epochs'][epoch]
+    #     colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * fake_features.shape[0]
+    #     visualise(np.concatenate((real_train_features, fake_features)),
+    #               epoch, colors,
+    #               False, True)
 
 
 if __name__ == '__main__':
