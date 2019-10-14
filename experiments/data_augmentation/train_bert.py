@@ -20,19 +20,50 @@ random.seed(2019)
 np.random.seed(2019)
 
 
-def experiment_trec():
+def experiment_trec(_phase):
+    """
+    phase = 'cls_on_real'
+    phase = 'gan'
+    phase = 'cls_on_fake'
+    """
     config_file = TRECConfig
     hparam = config_file.hparam
-    model_dir = os.path.join(config_file.model_dir,
-                             '_'.join(['lr', str(hparam['lr']),
+    model_real_dir = os.path.join(config_file.model_dir,
+                             '_'.join(['ph', config_file.phase_real,
+                                       'lr', str(hparam['lr']),
                                        'bs', str(hparam['batch_size']),
                                        'h', str(hparam['d_hidden']),
                                        'dp', str(hparam['dropout']),
                                        'frac', str(hparam['file_frac'])
                                        ]))
+    model_gan_dir = os.path.join(config_file.model_dir,
+                                  '_'.join(['ph', config_file.phase_gan,
+                                            'lr', str(hparam['lr']),
+                                            'bs', str(hparam['batch_size']),
+                                            'h', str(hparam['d_hidden']),
+                                            'dp', str(hparam['dropout']),
+                                            'frac', str(hparam['file_frac'])
+                                            ]))
+    model_fake_dir = os.path.join(config_file.model_dir,
+                                  '_'.join(['ph', config_file.phase_fake,
+                                            'lr', str(hparam['lr']),
+                                            'bs', str(hparam['batch_size']),
+                                            'h', str(hparam['d_hidden']),
+                                            'dp', str(hparam['dropout']),
+                                            'frac', str(hparam['file_frac'])
+                                            ]))
+    if _phase == config_file.phase_real:
+        model_dir = model_real_dir
+    elif _phase == config_file.phase_gan:
+        model_dir = model_gan_dir
+    elif _phase == config_file.phase_fake:
+        model_dir = model_fake_dir
+    else:
+        raise ValueError('unknown training phase name %s.' % _phase)
+
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
-    n_epochs = hparam['epochs']
+
     n_classes = config_file.n_label
     batch_size = hparam['batch_size']
     lr = hparam['lr']
@@ -151,26 +182,28 @@ def experiment_trec():
                     "lr": lr
                 }
             },
-            "num_epochs": n_epochs,
             "batch_size": batch_size,
             "cuda_device": cuda_device,
             "patience": patience,
+
+            "n_epoch_real": 1000,
             "n_epoch_gan": 100,
-            "num_loop_discriminator": 5,
+            "n_epoch_fake": 1000,
+
             "batch_per_epoch": batch_per_epoch,
+            "num_loop_discriminator": 5,
             "num_loop_classifier_on_fake": 100,
             "clip_value": 1,
             "n_classes": config_file.n_label,
-
-            # "phase": 'cls_on_real',
-            "phase": 'gan',
-            # "phase": 'cls_on_fake',
+            "phase": _phase,
+            "model_real_dir": model_real_dir,
+            "model_gan_dir": model_gan_dir,
+            "model_fake_dir": model_fake_dir
         })
 
     import tempfile
     # serialization_dir_ = tempfile.mkdtemp()
     trainer_ = TrainerBase.from_params(params_, model_dir)
-    phase = trainer_.get_phase()
     ###########
     # Training
     ###########
@@ -179,20 +212,20 @@ def experiment_trec():
     # save training meta data
     print('[saving] training meta data ...')
 
-    if phase == 'cls_on_real':
+    if _phase == 'cls_on_real':
         torch.save(meta_data_train, config_file.train_real_meta_path % (config_file.corpus_name, hparam['file_frac']))
-    elif phase == 'gan':
+    elif _phase == 'gan':
         torch.save(meta_data_train, config_file.train_gan_meta_path % (config_file.corpus_name, hparam['file_frac']))
-    elif phase == 'cls_on_fake':
+    elif _phase == 'cls_on_fake':
         torch.save(meta_data_train, config_file.train_fake_meta_path % (config_file.corpus_name, hparam['file_frac']))
     else:
-        raise ValueError('unknown training phase name %s.' % phase)
+        raise ValueError('unknown training phase name %s.' % _phase)
     print('[saved]')
 
     #######
     # Test
     #######
-    if phase == 'cls_on_real' or phase == 'cls_on_fake':
+    if _phase == 'cls_on_real' or _phase == 'cls_on_fake':
         test_metrics, meta_data_test = trainer_.test()
         pprint(test_metrics)
         print('[saving] test meta data ...')
@@ -201,7 +234,7 @@ def experiment_trec():
 
 
 if __name__ == '__main__':
-    # python -m allennlp.tests.training.gan_trainer_test
-    #
-    # pylint: disable=invalid-name
-    experiment_trec()
+    # phase = 'cls_on_real'
+    phase = 'gan'
+    # phase = 'cls_on_fake'
+    experiment_trec(phase)

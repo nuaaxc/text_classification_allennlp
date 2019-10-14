@@ -71,11 +71,12 @@ class GanBertTrainer(TrainerBase):
                  test_dataset: Iterable[Instance] = None,
                  validation_metric: str = "-loss",
                  serialization_dir: str = None,
-                 num_epochs: int = 20,
+                 n_epoch_real: int = 0,
+                 n_epoch_gan: int = 0,
+                 n_epoch_fake: int = 0,
                  batch_size: int = 16,
                  cuda_device: int = 0,
                  patience: int = 5,
-                 n_epoch_gan: int = 100,
                  num_serialized_models_to_keep: int = 1,
                  keep_serialized_model_every_num_seconds: int = None,
                  num_loop_discriminator: int = 5,
@@ -84,6 +85,9 @@ class GanBertTrainer(TrainerBase):
                  clip_value: float = 1,
                  n_classes: int = 0,
                  phase: str = None,
+                 model_real_dir: str = None,
+                 model_gan_dir: str = None,
+                 model_fake_dir: str = None,
                  ) -> None:
         super().__init__(serialization_dir, cuda_device)
 
@@ -100,19 +104,21 @@ class GanBertTrainer(TrainerBase):
         self._validation_dataset = validation_dataset
         self._test_dataset = test_dataset
 
-        self._num_epochs = num_epochs
+        self.n_epoch_real = n_epoch_real
+        self.n_epoch_gan = n_epoch_gan
+        self.n_epoch_fake = n_epoch_fake
+
         self._batch_size = batch_size
         self.n_classes = n_classes
 
         self._val_loss_tracker = MetricTracker(patience, validation_metric)
-        self._g_loss_tracker = MetricTracker(3, validation_metric)
+        self._g_loss_tracker = MetricTracker(patience, validation_metric)
         self._validation_metric = validation_metric[1:]
 
         self._checkpointer = Checkpointer(serialization_dir,
                                           keep_serialized_model_every_num_seconds,
                                           num_serialized_models_to_keep)
         self._batch_num_total = 0
-        self.n_epoch_gan = n_epoch_gan
         self.num_loop_discriminator = num_loop_discriminator
         self.batch_per_epoch = batch_per_epoch
         self.num_loop_classifier_on_fake = num_loop_classifier_on_fake
@@ -120,6 +126,10 @@ class GanBertTrainer(TrainerBase):
         self.cuda_device = cuda_device
         self.clip_value = clip_value
         self.phase = phase
+        self.n_epochs = None
+        self.model_real_dir = model_real_dir
+        self.model_gan_dir = model_gan_dir
+        self.model_fake_dir = model_fake_dir
 
     def get_phase(self):
         return self.phase
@@ -302,7 +312,7 @@ class GanBertTrainer(TrainerBase):
 
     def _train_epoch(self, epoch: int) -> Any:
 
-        logger.info("Epoch %d/%d", epoch, self._num_epochs - 1)
+        logger.info("Epoch %d/%d", epoch, self.n_epochs)
         logger.info("Phase: %s ..." % self.phase)
         self.model.train()
 
@@ -367,27 +377,30 @@ class GanBertTrainer(TrainerBase):
     def train(self) -> Any:
         logger.info("Beginning training.")
 
-        n_epochs = None
         val_metrics: Dict[str, float] = {}
         metrics: Dict[str, Any] = {}
         epochs_trained = 0
         training_start_time = time.time()
 
         if self.phase == 'gan':
-            n_epochs = self.n_epoch_gan
+            self.n_epochs = self.n_epoch_gan
             logger.info('[Load best model] ...')
+            best_model_state = torch.load(os.path.join(self.model_real_dir, 'best.th'))
+            if best_model_state:
+                self.model.load_state_dict(best_model_state)
+                logger.info('[Loaded]')
+
+        if self.phase == 'cls_on_real':
+            self.n_epochs = self.n_epoch_real
+
+        if self.phase == 'cls_on_fake':
+            self.n_epochs = self.n_epoch_fake
+            logger.info('[Load gan model] ...')
             if self._serialization_dir:
                 best_model_state = self._checkpointer.best_model_state()
                 if best_model_state:
                     self.model.load_state_dict(best_model_state)
                     logger.info('[Loaded]')
-
-        if self.phase == 'cls_on_real':
-            n_epochs = self._num_epochs
-
-        metrics['best_epoch'] = self._val_loss_tracker.best_epoch
-        for key, value in self._val_loss_tracker.best_epoch_metrics.items():
-            metrics["best_validation_" + key] = value
 
         r_data_epochs = {}
         g_data_epochs = {}
@@ -396,7 +409,7 @@ class GanBertTrainer(TrainerBase):
         cls_loss_on_real_epochs = {}
 
         # train over epochs
-        for epoch in range(n_epochs):
+        for epoch in range(self.n_epochs):
 
             epoch_start_time = time.time()
 
@@ -418,11 +431,11 @@ class GanBertTrainer(TrainerBase):
             else:
                 raise ValueError('unknown training phase %s.' % self.phase)
 
+            #############
             # Validation
-            if self._validation_dataset is not None and 'cls' in self.phase:
+            #############
+            if 'cls' in self.phase:
                 with torch.no_grad():
-                    # We have a validation set, so compute all the metrics on it,
-                    # and reset the metrics as validation ends.
                     val_loss, num_batches = self._validation_loss()
                     val_metrics = training_util.get_metrics(self.model, val_loss, num_batches, reset=True)
 
@@ -436,7 +449,12 @@ class GanBertTrainer(TrainerBase):
                         logger.info("Ran out of patience. Stopping training on real data.")
                         break
 
-            # Create overall metrics dict
+            if self.phase == 'gan':
+                self._g_loss_tracker.add_metric(g_loss_epochs[epoch])
+
+            #########################
+            # Create overall metrics
+            #########################
             training_elapsed_time = time.time() - training_start_time
             metrics["training_duration"] = str(datetime.timedelta(seconds=training_elapsed_time))
             metrics["training_epochs"] = epochs_trained
@@ -461,29 +479,26 @@ class GanBertTrainer(TrainerBase):
             if self._serialization_dir:
                 dump_metrics(os.path.join(self._serialization_dir, f'metrics_epoch_{epoch}.json'), metrics)
 
-            # if self._learning_rate_scheduler:
-            #     self._learning_rate_scheduler.step(this_epoch_val_metric, epoch)
-            # if self._momentum_scheduler:
-            #     self._momentum_scheduler.step(this_epoch_val_metric, epoch)
-
+            #############
+            # Save model
+            #############
             if 'cls' in self.phase:
-                self._save_checkpoint(epoch)
+                self._save_checkpoint(epoch, self._val_loss_tracker)
+            elif 'gan' in self.phase:
+                self._save_checkpoint(epoch, self._g_loss_tracker)
+            else:
+                raise ValueError('unknown training phase %s.' % self.phase)
 
             epoch_elapsed_time = time.time() - epoch_start_time
             logger.info("Epoch duration: %s", datetime.timedelta(seconds=epoch_elapsed_time))
 
-            if epoch < self._num_epochs - 1:
+            if epoch < self.n_epochs - 1:
                 training_elapsed_time = time.time() - training_start_time
-                estimated_time_remaining = training_elapsed_time * (self._num_epochs / float(epoch + 1) - 1)
+                estimated_time_remaining = training_elapsed_time * (self.n_epochs / float(epoch + 1) - 1)
                 formatted_time = str(datetime.timedelta(seconds=int(estimated_time_remaining)))
                 logger.info("Estimated training time remaining: %s", formatted_time)
 
             epochs_trained += 1
-
-        # Load the best model state before returning
-        # best_model_state = self._checkpointer.best_model_state()
-        # if best_model_state:
-        #     self.model.load_state_dict(best_model_state)
 
         meta_data = {
             'r_data_epochs': r_data_epochs,
@@ -511,38 +526,12 @@ class GanBertTrainer(TrainerBase):
 
         return val_loss, batches_this_epoch
 
-    def _save_checkpoint(self, epoch: Union[int, str]) -> None:
-        """
-        Saves a checkpoint of the model to self._serialization_dir.
-        Is a no-op if self._serialization_dir is None.
-        Parameters
-        ----------
-        epoch : Union[int, str], required.
-            The epoch of training.  If the checkpoint is saved in the middle
-            of an epoch, the parameter is a string with the epoch and timestamp.
-        """
-        # These are the training states we need to persist.
-        training_states = {
-            "metric_tracker": self._val_loss_tracker.state_dict(),
-            # "optimizer": self.optimizer.state_dict(),
-            "batch_num_total": self._batch_num_total
-        }
-
-        # If we have a learning rate or momentum scheduler, we should persist them too.
-        # if self._learning_rate_scheduler is not None:
-        #     training_states["learning_rate_scheduler"] = self._learning_rate_scheduler.state_dict()
-        # if self._momentum_scheduler is not None:
-        #     training_states["momentum_scheduler"] = self._momentum_scheduler.state_dict()
-
+    def _save_checkpoint(self, epoch: Union[int, str], _tracker) -> None:
         self._checkpointer.save_checkpoint(
             model_state=self.model.state_dict(),
             epoch=epoch,
-            training_states=training_states,
-            is_best_so_far=self._val_loss_tracker.is_best_so_far())
-
-        # Restore the original values for parameters so that training will not be affected.
-        # if self._moving_average is not None:
-        #     self._moving_average.restore()
+            training_states={},
+            is_best_so_far=_tracker.is_best_so_far())
 
     @classmethod
     def from_params(cls,  # type: ignore
@@ -609,17 +598,20 @@ class GanBertTrainer(TrainerBase):
             parameters += [[n, p] for n, p in component.named_parameters() if p.requires_grad]
         optimizer = GanOptimizer.from_params(parameters, params.pop("optimizer"))
 
-        num_epochs = params.pop_int("num_epochs")
+        n_epoch_real = params.pop_int("n_epoch_real")
+        n_epoch_gan = params.pop_int("n_epoch_gan")
+        n_epoch_fake = params.pop_int("n_epoch_fake")
         batch_size = params.pop_int("batch_size")
         patience = params.pop_int("patience")
-        n_epoch_gan = params.pop_int("n_epoch_gan")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
         num_loop_classifier_on_fake = params.pop_int("num_loop_classifier_on_fake")
         clip_value = params.pop_int("clip_value")
         n_classes = params.pop_int("n_classes")
         phase = params.pop("phase")
-
+        model_real_dir = params.pop("model_real_dir")
+        model_gan_dir = params.pop("model_gan_dir")
+        model_fake_dir = params.pop("model_fake_dir")
         params.pop("trainer")
 
         params.assert_empty(__name__)
@@ -633,14 +625,18 @@ class GanBertTrainer(TrainerBase):
                    validation_dataset=dev_dataset,
                    test_dataset=test_dataset,
                    serialization_dir=serialization_dir,
-                   num_epochs=num_epochs,
+                   n_epoch_real=n_epoch_real,
+                   n_epoch_gan=n_epoch_gan,
+                   n_epoch_fake=n_epoch_fake,
                    batch_size=batch_size,
                    cuda_device=cuda_device,
                    patience=patience,
-                   n_epoch_gan=n_epoch_gan,
                    num_loop_discriminator=num_loop_discriminator,
                    batch_per_epoch=batch_per_epoch,
                    num_loop_classifier_on_fake=num_loop_classifier_on_fake,
                    clip_value=clip_value,
                    n_classes=n_classes,
-                   phase=phase)
+                   phase=phase,
+                   model_real_dir=model_real_dir,
+                   model_gan_dir=model_gan_dir,
+                   model_fake_dir=model_fake_dir)

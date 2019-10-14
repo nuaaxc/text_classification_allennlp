@@ -176,11 +176,11 @@ class TRECConfig(DirConfig):
     max_seq_len = 30
 
     hparam = {
-        'lr': 0.00001,
+        'lr': 0.00002,
         'epochs': 2000,
         'patience': 1,
         'batch_size': 16,
-        'batch_per_epoch': 20,
+        'batch_per_epoch': 30,
         'd_hidden': 768,
         'dropout': 0.1,
         'cuda_device': 0,
@@ -223,3 +223,7 @@ class TRECConfig(DirConfig):
     train_fake_meta_path = os.path.join(result_dir, 'train_fake_meta_%s_%sp.th')
     test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
     img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')
+
+    phase_real = 'cls_on_real'
+    phase_gan = 'gan'
+    phase_fake = 'cls_on_fake'
