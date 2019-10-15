@@ -1,12 +1,9 @@
 from typing import Dict, Iterable, Any, Tuple, Union
 import logging
-import math
 import time
 import os
 import datetime
-import random
 import numpy as np
-from itertools import chain
 
 import sklearn
 
@@ -15,8 +12,7 @@ import torch
 from allennlp.common.tqdm import Tqdm
 from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
-from allennlp.common.util import (dump_metrics, gpu_memory_mb, peak_memory_mb,
-                                  lazy_groups_of)
+from allennlp.common.util import dump_metrics
 from allennlp.data import Instance
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.dataset_readers import DatasetReader
@@ -26,7 +22,6 @@ from allennlp.nn import util as nn_util
 from allennlp.training.trainer_base import TrainerBase
 from allennlp.training.metric_tracker import MetricTracker
 from allennlp.training.checkpointer import Checkpointer
-from allennlp.training.optimizers import Optimizer
 from allennlp.training import util as training_util
 
 from my_library.optimisation import GanOptimizer
@@ -131,10 +126,12 @@ class GanBertTrainer(TrainerBase):
         self.model_gan_dir = model_gan_dir
         self.model_fake_dir = model_fake_dir
 
+        self.data_features = []
+
     def get_phase(self):
         return self.phase
 
-    def _train_discriminator(self, batch, noise):
+    def _train_discriminator(self, f, f_aug, labels):
         # logger.info('### Training discriminator ###')
 
         self.optimizer.stage = 'discriminator'
@@ -144,29 +141,28 @@ class GanBertTrainer(TrainerBase):
             p.requires_grad = True  # they are set to False below in netG update
 
         # Real example
-        features = self.model.feature_extractor(batch['text'])
-        real_validity = self.model.discriminator(features, batch['label'])["output"]
+        real_validity = self.model.discriminator(f, labels)["output"]
 
         # Fake example
-        fake_data = self.model.generator(noise["array"], noise["label"])["output"].detach()
-        fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
+        # fake_data = self.model.generator(noise["array"], noise["label"])["output"].detach()
+        fake_data = self.model.generator(f_aug, labels)["output"].detach()
+        fake_validity = self.model.discriminator(fake_data, labels)["output"]
 
         # Gradient penalty
         gradient_penalty = compute_gradient_penalty(self.model.discriminator,
-                                                    features.data,
+                                                    f.data,
                                                     fake_data.data,
-                                                    torch.randint_like(noise["label"], 0, self.n_classes),
+                                                    torch.randint_like(labels, 0, self.n_classes),
                                                     self.cuda_device)
 
-        # d_error = -torch.mean(real_validity) + torch.mean(fake_validity)
         d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 1 * gradient_penalty
 
         d_error.backward()
         self.optimizer.step()
 
         # Clip weights of discriminator
-        for p in self.model.discriminator.parameters():
-            p.data.clamp_(-self.clip_value, self.clip_value)
+        # for p in self.model.discriminator.parameters():
+        #     p.data.clamp_(-self.clip_value, self.clip_value)
 
         return d_error.item()
 
@@ -178,6 +174,10 @@ class GanBertTrainer(TrainerBase):
 
         for p in self.model.discriminator.parameters():
             p.requires_grad = False
+
+        perturbation = torch.randn_like(features)
+        features_aug = features + perturbation
+        features_aug = nn_util.move_to_device(features_aug, self.cuda_device)
 
         generated = self.model.generator(noise["array"],
                                          noise["label"],
@@ -278,8 +278,8 @@ class GanBertTrainer(TrainerBase):
             return {'cls_loss_on_fake': 0.}, np.vstack(g_data)
 
     def _train_gan(self) -> Any:
-        data_iterator = self.data_iterator(self.train_dataset)
-        noise_iterator = self.noise_iterator(self.noise_dataset)
+        print(self.data_features)
+        exit()
 
         loss_d = []
         loss_g = []
@@ -288,11 +288,15 @@ class GanBertTrainer(TrainerBase):
         for i in range(self.batch_per_epoch):
 
             batch = next(data_iterator)
-            noise = next(noise_iterator)
             batch = nn_util.move_to_device(batch, self.cuda_device)
+
+            noise = next(noise_iterator)
             noise = nn_util.move_to_device(noise, self.cuda_device)
 
-            _loss_d = self._train_discriminator(batch, noise)
+            features = self.model.feature_extractor(batch['text'])
+            features_aug = features + torch.randn_like(features).cuda(self.cuda_device)
+
+            _loss_d = self._train_discriminator(features, features_aug, batch['label'])
             loss_d.append(_loss_d)
 
             if (i + 1) % self.num_loop_discriminator == 0:
@@ -302,8 +306,9 @@ class GanBertTrainer(TrainerBase):
         # generate samples
         g_data = []
         for i in range(self.batch_per_epoch):
-            noise = next(noise_iterator)
-            noise = nn_util.move_to_device(noise, self.cuda_device)
+            batch = next(data_iterator)
+            batch = nn_util.move_to_device(batch, self.cuda_device)
+            features = self.model.feature_extractor(batch['text'])
             generated = self.model.generator(noise["array"],
                                              noise["label"])['output']
 
@@ -389,6 +394,14 @@ class GanBertTrainer(TrainerBase):
             if best_model_state:
                 self.model.load_state_dict(best_model_state)
                 logger.info('[Loaded]')
+            # creating feature space
+            if len(self.data_features) > 0:
+                self.data_features = []
+            for batch in self.data_iterator(self.train_dataset, num_epochs=1, shuffle=False):
+                batch = nn_util.move_to_device(batch, self.cuda_device)
+                features = self.model.feature_extractor(batch['text'])
+                exit()
+                self.data_features.append({'features': features, 'labels': batch['label']})
 
         if self.phase == 'cls_on_real':
             self.n_epochs = self.n_epoch_real

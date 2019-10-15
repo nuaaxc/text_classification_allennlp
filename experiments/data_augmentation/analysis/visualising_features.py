@@ -82,35 +82,32 @@ def visualize_real_features(meta_path, corpus_name, file_frac):
 def visualize_gen_features(real_meta_path, gan_meta_path, fake_meta_path,
                            corpus_name, file_frac):
     real_meta_data = torch.load(real_meta_path % (corpus_name, file_frac))
-    real_train_features = real_meta_data['r_data_epochs'][19][0]
+    real_train_features = real_meta_data['r_data_epochs'][17][0]
 
-    gan_meta_data = torch.load(gan_meta_path % (corpus_name, file_frac))
-    fake_meta_data = torch.load(fake_meta_path % (corpus_name, file_frac))
     palettes = {
         0: 'blue',
         1: 'red',
         2: 'green'
     }
 
-    for epoch in gan_meta_data['g_data_epochs'].keys():
-        gen_features = gan_meta_data['g_data_epochs'][epoch]
-        colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * gen_features.shape[0]
-        visualise(np.concatenate((real_train_features, gen_features)),
-                  epoch, colors,
-                  False, True)
-
-    # for epoch in fake_meta_data['g_data_epochs'].keys():
-    #     fake_features = fake_meta_data['g_data_epochs'][epoch]
-    #     colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * fake_features.shape[0]
-    #     visualise(np.concatenate((real_train_features, fake_features)),
+    # gan_meta_data = torch.load(gan_meta_path % (corpus_name, file_frac))
+    # for epoch in gan_meta_data['g_data_epochs'].keys():
+    #     gen_features = gan_meta_data['g_data_epochs'][epoch]
+    #     colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * gen_features.shape[0]
+    #     visualise(np.concatenate((real_train_features, gen_features)),
     #               epoch, colors,
     #               False, True)
 
+    fake_meta_data = torch.load(fake_meta_path % (corpus_name, file_frac))
+    for epoch in fake_meta_data['g_data_epochs'].keys():
+        fake_features = fake_meta_data['g_data_epochs'][epoch]
+        colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * fake_features.shape[0]
+        visualise(np.concatenate((real_train_features, fake_features)),
+                  epoch, colors,
+                  False, True)
+
 
 if __name__ == '__main__':
-    # visualize_real_features(ConfigFile.train_meta_path,
-    #                         ConfigFile.corpus_name,
-    #                         ConfigFile.hparam['file_frac'])
     visualize_gen_features(ConfigFile.train_real_meta_path,
                            ConfigFile.train_gan_meta_path,
                            ConfigFile.train_fake_meta_path,
