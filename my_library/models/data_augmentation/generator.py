@@ -23,6 +23,7 @@ class Generator(Model):
                 z_label: torch.Tensor,
                 discriminator: Model = None) -> Dict[str, torch.Tensor]:
         # generate features
+        z_label = z_label.long()
         embbed_label = self.label_emb(z_label)
         features = self.feed_forward(torch.cat([z_text, embbed_label], dim=-1))
         output_dict = {'output': features}

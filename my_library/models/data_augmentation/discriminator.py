@@ -24,6 +24,7 @@ class Discriminator(Model):
     def forward(self,  # type: ignore
                 text: torch.Tensor,
                 label: torch.Tensor) -> Dict[str, torch.Tensor]:
+        label = label.long()
         embbed_label = self.label_emb(label)
         output = self.feed_forward(torch.cat([text, embbed_label], dim=-1))
         return {"output": output}

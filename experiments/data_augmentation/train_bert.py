@@ -86,7 +86,7 @@ def experiment_trec(_phase):
             # Readers
             "dataset_reader": {
                 "lazy": False,
-                "type": "trec",
+                "type": "trec_dataset",
                 "tokenizer": {
                     "word_splitter": "bert-basic"
                 },
@@ -103,7 +103,12 @@ def experiment_trec(_phase):
                 "dim": d_hidden,
                 "label_set": config_file.labels
             },
-
+            "feature_reader": {
+                "type": "trec_feature",
+                "meta_path": config_file.train_real_meta_path,
+                "corpus_name": config_file.corpus_name,
+                "file_frac": hparam['file_frac']
+            },
             # Iterators
             "training_iterator": {
                 "type": "bucket",
@@ -116,7 +121,10 @@ def experiment_trec(_phase):
                 "type": "basic",
                 "batch_size": batch_size
             },
-
+            "feature_iterator": {
+                "type": "basic",
+                "batch_size": batch_size
+            },
             # Modules
             "feature_extractor": {
                 "type": "bert_encoder",
@@ -187,7 +195,7 @@ def experiment_trec(_phase):
             "patience": patience,
 
             "n_epoch_real": 1000,
-            "n_epoch_gan": 200,
+            "n_epoch_gan": 100,
             "n_epoch_fake": 1000,
 
             "batch_per_epoch": batch_per_epoch,
@@ -208,8 +216,8 @@ def experiment_trec(_phase):
     ###########
     # Training
     ###########
-    train_metrics, meta_data_train = trainer_.train()
-    pprint(train_metrics)
+    meta_data_train = trainer_.train()
+    pprint(meta_data_train['metrics'])
     # save training meta data
     print('[saving] training meta data ...')
 
@@ -227,8 +235,8 @@ def experiment_trec(_phase):
     # Test
     #######
     if _phase == 'cls_on_real' or _phase == 'cls_on_fake':
-        test_metrics, meta_data_test = trainer_.test()
-        pprint(test_metrics)
+        meta_data_test = trainer_.test()
+        pprint(meta_data_test['accuracy'])
         print('[saving] test meta data ...')
         torch.save(meta_data_test, config_file.test_meta_path % (config_file.corpus_name, hparam['file_frac']))
         print('[saved]')
@@ -236,6 +244,6 @@ def experiment_trec(_phase):
 
 if __name__ == '__main__':
     # phase = 'cls_on_real'
-    phase = 'gan'
-    # phase = 'cls_on_fake'
+    # phase = 'gan'
+    phase = 'cls_on_fake'
     experiment_trec(phase)

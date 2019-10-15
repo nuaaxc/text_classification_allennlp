@@ -1,8 +1,8 @@
 from typing import Iterator, List, Dict
 import logging
-
+import torch
 from allennlp.data import Instance
-from allennlp.data.fields import TextField, LabelField
+from allennlp.data.fields import TextField, LabelField, ArrayField
 
 from allennlp.data.dataset_readers import DatasetReader
 
@@ -14,7 +14,7 @@ from allennlp.data.tokenizers.word_filter import StopwordFilter
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DatasetReader.register("trec")
+@DatasetReader.register("trec_dataset")
 class TRECDatasetReader(DatasetReader):
     def __init__(self,
                  lazy: bool = False,
@@ -37,6 +37,27 @@ class TRECDatasetReader(DatasetReader):
         if label is not None:
             fields['label'] = LabelField(label)
         return Instance(fields)
+
+
+@DatasetReader.register("trec_feature")
+class TRECFeatureReader(DatasetReader):
+    def __init__(self,
+                 meta_path: str,
+                 corpus_name: str,
+                 file_frac: int) -> None:
+        super().__init__(lazy=True)
+        self.meta_path = meta_path
+        self.corpus_name = corpus_name
+        self.file_frac = file_frac
+
+    def _read(self, _: str) -> Iterator[Instance]:
+        features = torch.load(self.meta_path % (self.corpus_name, self.file_frac))['training_features']
+        for f in features:
+            yield self.text_to_instance(f)
+
+    def text_to_instance(self, f) -> Instance:  # type: ignore
+        return Instance({"feature": ArrayField(f['feature']),
+                         "label": ArrayField(f['label'])})
 
 
 if __name__ == '__main__':

@@ -177,9 +177,9 @@ class TRECConfig(DirConfig):
 
     hparam = {
         'lr': 0.00001,
-        'patience': 5,
+        'patience': 1,
         'batch_size': 16,
-        'batch_per_epoch': 30,
+        'batch_per_epoch': 20,
         'd_hidden': 768,
         'dropout': 0.1,
         'cuda_device': 0,

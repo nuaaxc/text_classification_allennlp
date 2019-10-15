@@ -35,6 +35,7 @@ class Classifier(Model):
         output = torch.softmax(output, dim=-1)
         output_dict = {"output": output}
         if labels is not None:
+            labels = labels.long()
             output_dict["loss"] = self.loss(output, labels)
             for metric in self.metrics.values():
                 metric(output, labels.squeeze(-1))
