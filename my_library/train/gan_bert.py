@@ -4,9 +4,9 @@ import time
 import os
 import datetime
 import numpy as np
+import random
 
 import sklearn
-
 import torch
 
 from allennlp.common.tqdm import Tqdm
@@ -85,6 +85,7 @@ class GanBertTrainer(TrainerBase):
                  keep_serialized_model_every_num_seconds: int = None,
                  num_loop_discriminator: int = 5,
                  batch_per_epoch: int = 10,
+                 batch_per_generator: int = 10,
                  n_batch_fake: int = 10,
                  clip_value: float = 1,
                  n_classes: int = 0,
@@ -123,9 +124,10 @@ class GanBertTrainer(TrainerBase):
         self._checkpointer = Checkpointer(serialization_dir,
                                           keep_serialized_model_every_num_seconds,
                                           num_serialized_models_to_keep)
-        self._batch_num_total = 0
+
         self.num_loop_discriminator = num_loop_discriminator
         self.batch_per_epoch = batch_per_epoch
+        self.batch_per_generator = batch_per_generator
         self.n_batch_fake = n_batch_fake
 
         self.cuda_device = cuda_device
@@ -136,8 +138,7 @@ class GanBertTrainer(TrainerBase):
         self.model_gan_dir = model_gan_dir
         self.model_fake_dir = model_fake_dir
 
-    def get_phase(self):
-        return self.phase
+        self.aug_features = []
 
     def _train_discriminator(self, f, f_aug, label):
         self.optimizer.stage = 'discriminator'
@@ -298,14 +299,30 @@ class GanBertTrainer(TrainerBase):
                 _loss_g = self._train_generator(f_aug, feature['label'])
                 loss_g.append(_loss_g)
 
+        # #################
         # generate samples
+        # #################
         g_data = []
-        for i in range(self.batch_per_epoch):
-            feature = next(feature_iterator)
-            feature = nn_util.move_to_device(feature, self.cuda_device)
-            f_aug = aug_normal(feature['feature'], self.cuda_device)
+        feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
 
+        print(len(self.aug_features))
+
+        for i in range(self.batch_per_generator):
+            # Sampling a feature from either the real or augmented features
+            choice: float = random.random()
+            if len(self.aug_features) == 0 or choice > 0.95:
+                feature = next(feature_iterator)
+            else:
+                feature = random.sample(self.aug_features, 1)[0]
+
+            feature = nn_util.move_to_device(feature, self.cuda_device)
+
+            # print(feature)
+
+            f_aug = aug_normal(feature['feature'], self.cuda_device)
             generated = self.model.generator(f_aug, feature['label'])['output']
+            self.aug_features.append({'feature': generated.data.cpu(),
+                                      'label': feature['label'].data.cpu()})
 
             g_data.append(generated.data.cpu().numpy())
         return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data)
@@ -628,6 +645,7 @@ class GanBertTrainer(TrainerBase):
         patience = params.pop_int("patience")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
+        batch_per_generator = params.pop_int("batch_per_generator")
         n_batch_fake = params.pop_int("n_batch_fake")
         clip_value = params.pop_int("clip_value")
         n_classes = params.pop_int("n_classes")
@@ -663,6 +681,7 @@ class GanBertTrainer(TrainerBase):
                    patience=patience,
                    num_loop_discriminator=num_loop_discriminator,
                    batch_per_epoch=batch_per_epoch,
+                   batch_per_generator=batch_per_generator,
                    n_batch_fake=n_batch_fake,
                    clip_value=clip_value,
                    n_classes=n_classes,

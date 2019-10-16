@@ -72,6 +72,7 @@ def experiment_trec(_phase):
     cuda_device = hparam['cuda_device']
     patience = hparam['patience']
     batch_per_epoch = hparam['batch_per_epoch']
+    batch_per_generator = hparam['batch_per_generator']
 
     params_ = Params(
         {
@@ -143,7 +144,7 @@ def experiment_trec(_phase):
                 },
                 "feed_forward": {
                     "input_dim": 2 * d_hidden,
-                    "num_layers": 2,
+                    "num_layers": 1,
                     "hidden_dims": d_hidden,
                     "activations": "relu",
                     "dropout": dropout
@@ -199,6 +200,7 @@ def experiment_trec(_phase):
             "n_epoch_fake": 1000,
 
             "batch_per_epoch": batch_per_epoch,
+            "batch_per_generator": batch_per_generator,
             "num_loop_discriminator": 5,
             "n_batch_fake": 50,
             "clip_value": 1,
@@ -244,6 +246,6 @@ def experiment_trec(_phase):
 
 if __name__ == '__main__':
     # phase = 'cls_on_real'
-    # phase = 'gan'
-    phase = 'cls_on_fake'
+    phase = 'gan'
+    # phase = 'cls_on_fake'
     experiment_trec(phase)

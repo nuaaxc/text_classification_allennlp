@@ -177,9 +177,10 @@ class TRECConfig(DirConfig):
 
     hparam = {
         'lr': 0.00001,
-        'patience': 1,
+        'patience': 5,
         'batch_size': 16,
-        'batch_per_epoch': 20,
+        'batch_per_epoch': 30,
+        'batch_per_generator': 20,
         'd_hidden': 768,
         'dropout': 0.1,
         'cuda_device': 0,
@@ -188,10 +189,13 @@ class TRECConfig(DirConfig):
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/TREC')
+        root_local = os.path.join(DirConfig.home, 'Documents/data61/project/text_classification/dataset/TREC')
     elif 'home' in DirConfig.home:
         root = '/home/xu052/text_classification/dataset/TREC/'
+        root_local = ''
     else:
         root = ''
+        root_local = ''
 
     # 6 classes
     labels = [
@@ -202,8 +206,8 @@ class TRECConfig(DirConfig):
 
     data_dir = os.path.join(root, 'data')
     cache_dir = os.path.join(root, 'cache')
-    model_dir = os.path.join(root, 'models')
-    result_dir = os.path.join(root, 'results')
+    model_dir = os.path.join(root_local, 'models')
+    result_dir = os.path.join(root_local, 'results')
 
     vocab_path = os.path.join(cache_dir, 'vocab')
 
