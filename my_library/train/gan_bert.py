@@ -34,6 +34,10 @@ def aug_normal(f, cuda_device):
     return f + 0.1 * torch.randn_like(f).cuda(cuda_device)
 
 
+def aug_uniform(f, cuda_device):
+    return f + 0.1 * torch.rand_like(f).cuda(cuda_device)
+
+
 def compute_gradient_penalty(D, h_real, h_fake, labels, cuda_device):
     """Calculates the gradient penalty loss for WGAN GP"""
 
@@ -253,7 +257,7 @@ class GanBertTrainer(TrainerBase):
 
             feature = next(feature_iterator)
             feature = nn_util.move_to_device(feature, self.cuda_device)
-            f_aug = aug_normal(feature['feature'], self.cuda_device)
+            f_aug = aug_uniform(feature['feature'], self.cuda_device)
 
             generated = self.model.generator(f_aug, feature["label"])['output']
 
@@ -286,7 +290,7 @@ class GanBertTrainer(TrainerBase):
             # discriminator
             feature = next(feature_iterator)
             feature = nn_util.move_to_device(feature, self.cuda_device)
-            f_aug = aug_normal(feature['feature'], self.cuda_device)
+            f_aug = aug_uniform(feature['feature'], self.cuda_device)
 
             _loss_d = self._train_discriminator(feature['feature'], f_aug, feature['label'])
             loss_d.append(_loss_d)
@@ -295,7 +299,7 @@ class GanBertTrainer(TrainerBase):
                 # generator
                 feature = next(feature_iterator)
                 feature = nn_util.move_to_device(feature, self.cuda_device)
-                f_aug = aug_normal(feature['feature'], self.cuda_device)
+                f_aug = aug_uniform(feature['feature'], self.cuda_device)
                 _loss_g = self._train_generator(f_aug, feature['label'])
                 loss_g.append(_loss_g)
 
@@ -310,7 +314,7 @@ class GanBertTrainer(TrainerBase):
         for i in range(self.batch_per_generator):
             # Sampling a feature from either the real or augmented features
             choice: float = random.random()
-            if len(self.aug_features) == 0 or choice > 0.95:
+            if len(self.aug_features) == 0 or choice > 0.1:
                 feature = next(feature_iterator)
             else:
                 feature = random.sample(self.aug_features, 1)[0]
@@ -319,7 +323,7 @@ class GanBertTrainer(TrainerBase):
 
             # print(feature)
 
-            f_aug = aug_normal(feature['feature'], self.cuda_device)
+            f_aug = aug_uniform(feature['feature'], self.cuda_device)
             generated = self.model.generator(f_aug, feature['label'])['output']
             self.aug_features.append({'feature': generated.data.cpu(),
                                       'label': feature['label'].data.cpu()})
