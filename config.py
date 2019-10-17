@@ -180,7 +180,7 @@ class TRECConfig(DirConfig):
         'patience': 5,
         'batch_size': 16,
         'batch_per_epoch': 30,
-        'batch_per_generator': 20,
+        'batch_per_generator': 40,
         'd_hidden': 768,
         'dropout': 0.1,
         'cuda_device': 0,

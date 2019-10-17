@@ -12,7 +12,7 @@ from config import TRECConfig as ConfigFile
 random_state = 2019
 
 
-def visualise(x, epoch, color, is_show=False, is_export=False):
+def visualise(x, epoch, fill_color, line_color, alpha, markers, is_show=False, is_export=False):
     tsne_model = TSNE(n_components=2,
                       perplexity=50,
                       learning_rate=10,
@@ -28,8 +28,12 @@ def visualise(x, epoch, color, is_show=False, is_export=False):
 
     plot.scatter(x=tsne_points[:, 0],
                  y=tsne_points[:, 1],
-                 size=3,
-                 color=color)
+                 size=8,
+                 fill_color=fill_color,
+                 line_color=line_color,
+                 fill_alpha=alpha,
+                 line_alpha=alpha,
+                 marker=markers)
 
     if is_show:
         show(plot)
@@ -39,50 +43,11 @@ def visualise(x, epoch, color, is_show=False, is_export=False):
         print('saved to %s.' % ConfigFile.img_gen_feature_path % epoch)
 
 
-def over_epoch(epoch_specified: List = None):
-    # stance_target = 'a'
-    stance_target = 'la'
-    # stance_target = 'cc'
-    # stance_target = 'la'
-    train_meta_data = torch.load(ConfigFile.train_meta_path % stance_target)
-    real_train_features = train_meta_data['r_data_epochs'][15]
-    real_test_features = torch.load(ConfigFile.test_meta_path % stance_target)
-
-    colors = {
-        0: 'blue',
-        1: 'red',
-        2: 'green'
-    }
-    if epoch_specified is None:
-        epoch_specified = train_meta_data['g_data_epochs'].keys()
-
-    for epoch in epoch_specified:
-        gen_features = train_meta_data['g_data_epochs'][epoch]
-        labels = [0] * real_train_features.shape[0] + [1] * gen_features.shape[0] + [2] * real_test_features.shape[0]
-        visualise(np.concatenate((real_train_features, gen_features, real_test_features)),
-                  epoch, colors, labels,
-                  False, True)
-
-
-def visualize_real_features(meta_path, corpus_name, file_frac):
-    train_meta_data = torch.load(meta_path % (corpus_name, file_frac))
-    n_samples = train_meta_data['r_data_epochs'][0][0].shape[0]
-
-    for epoch in train_meta_data['r_data_epochs'].keys():
-        real_train_features = train_meta_data['r_data_epochs'][epoch]
-        r_data, r_label = real_train_features
-        colors = [bpa.all_palettes['Dark2'][6][label] for label in r_label]
-        visualise(r_data,
-                  epoch=epoch,
-                  color=colors,
-                  is_show=False,
-                  is_export=True)
-
-
-def visualize_gen_features(real_meta_path, gan_meta_path, fake_meta_path,
-                           corpus_name, file_frac):
+def visualize_features(real_meta_path, gan_meta_path, fake_meta_path,
+                       corpus_name, file_frac):
     real_meta_data = torch.load(real_meta_path % (corpus_name, file_frac))
-    real_train_features = real_meta_data['r_data_epochs'][real_meta_data['metrics']['best_epoch']][0]
+    real_train_features, real_training_labels = \
+        real_meta_data['r_data_epochs'][real_meta_data['metrics']['best_epoch']]
 
     palettes = {
         0: 'blue',
@@ -92,10 +57,25 @@ def visualize_gen_features(real_meta_path, gan_meta_path, fake_meta_path,
 
     gan_meta_data = torch.load(gan_meta_path % (corpus_name, file_frac))
     for epoch in gan_meta_data['g_data_epochs'].keys():
-        gen_features = gan_meta_data['g_data_epochs'][epoch]
-        colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * gen_features.shape[0]
+        gen_features, gen_labels = gan_meta_data['g_data_epochs'][epoch]
+
+        r_markers = ['circle'] * len(real_training_labels)
+        g_markers = ['triangle'] * len(gen_labels)
+        markers = r_markers + g_markers
+
+        r_fill_colors = [bpa.all_palettes['Dark2'][6][label] for label in real_training_labels]
+        g_fill_colors = ['white'] * len(gen_labels)
+        fill_colors = r_fill_colors + g_fill_colors
+
+        r_line_colors = ['grey'] * len(real_training_labels)
+        g_line_colors = [bpa.all_palettes['Dark2'][6][int(label)] for label in gen_labels]
+        line_colors = r_line_colors + g_line_colors
+
+        r_alphas = [1.] * len(real_training_labels)
+        g_alphas = [1.] * len(gen_labels)
+        alphas = r_alphas + g_alphas
         visualise(np.concatenate((real_train_features, gen_features)),
-                  epoch, colors,
+                  epoch, fill_colors, line_colors, alphas, markers,
                   False, True)
 
     # fake_meta_data = torch.load(fake_meta_path % (corpus_name, file_frac))
@@ -108,8 +88,8 @@ def visualize_gen_features(real_meta_path, gan_meta_path, fake_meta_path,
 
 
 if __name__ == '__main__':
-    visualize_gen_features(ConfigFile.train_real_meta_path,
-                           ConfigFile.train_gan_meta_path,
-                           ConfigFile.train_fake_meta_path,
-                           ConfigFile.corpus_name,
-                           ConfigFile.hparam['file_frac'])
+    visualize_features(ConfigFile.train_real_meta_path,
+                       ConfigFile.train_gan_meta_path,
+                       ConfigFile.train_fake_meta_path,
+                       ConfigFile.corpus_name,
+                       ConfigFile.hparam['file_frac'])
