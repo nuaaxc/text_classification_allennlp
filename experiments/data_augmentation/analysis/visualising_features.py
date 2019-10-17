@@ -43,38 +43,40 @@ def visualise(x, epoch, fill_color, line_color, alpha, markers, is_show=False, i
         print('saved to %s.' % ConfigFile.img_gen_feature_path % epoch)
 
 
-def visualize_features(real_meta_path, gan_meta_path, fake_meta_path,
+def visualize_features(real_meta_path, gan_meta_path, fake_meta_path, test_meta_path,
                        corpus_name, file_frac):
     real_meta_data = torch.load(real_meta_path % (corpus_name, file_frac))
     real_train_features, real_training_labels = \
         real_meta_data['r_data_epochs'][real_meta_data['metrics']['best_epoch']]
+    test_meta_data = torch.load(test_meta_path % (corpus_name, file_frac))
 
-    palettes = {
-        0: 'blue',
-        1: 'red',
-        2: 'green'
-    }
+    # v_data, v_labels = real_meta_data['v_data_epochs']
+    t_data, t_labels = test_meta_data['r_data']
 
     gan_meta_data = torch.load(gan_meta_path % (corpus_name, file_frac))
     for epoch in gan_meta_data['g_data_epochs'].keys():
         gen_features, gen_labels = gan_meta_data['g_data_epochs'][epoch]
 
         r_markers = ['circle'] * len(real_training_labels)
+        t_markers = ['diamond'] * len(t_labels)
         g_markers = ['triangle'] * len(gen_labels)
-        markers = r_markers + g_markers
+        markers = r_markers + t_markers + g_markers
 
         r_fill_colors = [bpa.all_palettes['Dark2'][6][label] for label in real_training_labels]
+        t_fill_colors = ['blue'] * len(t_labels)
         g_fill_colors = ['white'] * len(gen_labels)
-        fill_colors = r_fill_colors + g_fill_colors
+        fill_colors = r_fill_colors + t_fill_colors + g_fill_colors
 
         r_line_colors = ['grey'] * len(real_training_labels)
+        t_line_colors = ['grey'] * len(t_labels)
         g_line_colors = [bpa.all_palettes['Dark2'][6][int(label)] for label in gen_labels]
-        line_colors = r_line_colors + g_line_colors
+        line_colors = r_line_colors + t_line_colors + g_line_colors
 
         r_alphas = [1.] * len(real_training_labels)
+        t_alphas = [0.5] * len(t_labels)
         g_alphas = [1.] * len(gen_labels)
-        alphas = r_alphas + g_alphas
-        visualise(np.concatenate((real_train_features, gen_features)),
+        alphas = r_alphas + t_alphas + g_alphas
+        visualise(np.concatenate((real_train_features, t_data, gen_features)),
                   epoch, fill_colors, line_colors, alphas, markers,
                   False, True)
 
@@ -91,5 +93,6 @@ if __name__ == '__main__':
     visualize_features(ConfigFile.train_real_meta_path,
                        ConfigFile.train_gan_meta_path,
                        ConfigFile.train_fake_meta_path,
+                       ConfigFile.test_meta_path,
                        ConfigFile.corpus_name,
                        ConfigFile.hparam['file_frac'])

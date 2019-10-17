@@ -31,11 +31,11 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def aug_normal(f, cuda_device):
-    return f + 0.1 * torch.randn_like(f).cuda(cuda_device)
+    return f + 0.0001 * torch.randn_like(f).cuda(cuda_device)
 
 
-def aug_uniform(f, cuda_device):
-    return f + 0.1 * torch.rand_like(f).cuda(cuda_device)
+# def aug_uniform(f, cuda_device):
+#     return f + 0.001 * torch.rand_like(f).cuda(cuda_device)
 
 
 def compute_gradient_penalty(D, h_real, h_fake, labels, cuda_device):
@@ -166,7 +166,7 @@ class GanBertTrainer(TrainerBase):
                                                     torch.randint_like(label, 0, self.n_classes),
                                                     self.cuda_device)
 
-        d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
+        d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10. * gradient_penalty
 
         d_error.backward()
         self.optimizer.step()
@@ -257,7 +257,7 @@ class GanBertTrainer(TrainerBase):
 
             feature = next(feature_iterator)
             feature = nn_util.move_to_device(feature, self.cuda_device)
-            f_aug = aug_uniform(feature['feature'], self.cuda_device)
+            f_aug = aug_normal(feature['feature'], self.cuda_device)
 
             generated = self.model.generator(f_aug, feature["label"])['output']
 
@@ -282,7 +282,7 @@ class GanBertTrainer(TrainerBase):
 
     def sample_feature(self, feature_iterator):
         choice: float = random.random()
-        if len(self.aug_features) == 0 or choice > 0.2:
+        if len(self.aug_features) == 0 or choice > 0.99:
             feature = next(feature_iterator)
         else:
             feature = random.sample(self.aug_features, 1)[0]
@@ -300,7 +300,7 @@ class GanBertTrainer(TrainerBase):
             # discriminator
             # ##############
             feature = self.sample_feature(feature_iterator)
-            f_aug = aug_uniform(feature['feature'], self.cuda_device)
+            f_aug = aug_normal(feature['feature'], self.cuda_device)
 
             _loss_d = self._train_discriminator(feature['feature'], f_aug, feature['label'])
             loss_d.append(_loss_d)
@@ -310,7 +310,7 @@ class GanBertTrainer(TrainerBase):
                 # generator
                 # ##########
                 feature = self.sample_feature(feature_iterator)
-                f_aug = aug_uniform(feature['feature'], self.cuda_device)
+                f_aug = aug_normal(feature['feature'], self.cuda_device)
                 _loss_g = self._train_generator(f_aug, feature['label'])
                 loss_g.append(_loss_g)
 
@@ -324,7 +324,7 @@ class GanBertTrainer(TrainerBase):
         for i in range(self.batch_per_generator):
             feature = self.sample_feature(feature_iterator)
             # print(feature)
-            f_aug = aug_uniform(feature['feature'], self.cuda_device)
+            f_aug = aug_normal(feature['feature'], self.cuda_device)
             generated = self.model.generator(f_aug, feature['label'])['output']
             self.aug_features.append({'feature': generated.data.cpu(),
                                       'label': feature['label'].data.cpu()})
@@ -391,10 +391,10 @@ class GanBertTrainer(TrainerBase):
 
                     y_ = self.model.classifier(features)['output']
 
-                    y_true.extend(batch['label'].cpu().numpy())
+                    y_true.extend(batch['label'].data.cpu().numpy())
                     y_pred.extend(y_.max(1)[1].cpu().numpy())
 
-                return {'r_data': np.vstack(r_data),
+                return {'r_data': (np.vstack(r_data), y_true),
                         'micro': sklearn.metrics.f1_score(y_true, y_pred, average='micro'),
                         'macro': sklearn.metrics.f1_score(y_true, y_pred, average='macro'),
                         'accuracy': sklearn.metrics.accuracy_score(y_true, y_pred)}

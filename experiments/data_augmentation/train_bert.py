@@ -160,8 +160,8 @@ def experiment_trec(_phase):
                 },
                 "feed_forward": {
                     "input_dim": 2 * d_hidden,
-                    "num_layers": 3,
-                    "hidden_dims": [d_hidden, d_hidden, 1],
+                    "num_layers": 2,
+                    "hidden_dims": [d_hidden, 1],
                     "activations": "relu",
                     "dropout": dropout
                 },
@@ -180,11 +180,11 @@ def experiment_trec(_phase):
                 "type": "gan",
                 "generator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.00005
+                    "lr": 0.0001
                 },
                 "discriminator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.00005
+                    "lr": 0.0001
                 },
                 "classifier_optimizer": {
                     "type": "adam",
@@ -196,12 +196,12 @@ def experiment_trec(_phase):
             "patience": patience,
 
             "n_epoch_real": 1000,
-            "n_epoch_gan": 100,
+            "n_epoch_gan": 600,
             "n_epoch_fake": 1000,
 
             "batch_per_epoch": batch_per_epoch,
             "batch_per_generator": batch_per_generator,
-            "num_loop_discriminator": 5,
+            "num_loop_discriminator": 2,
             "n_batch_fake": 50,
             "clip_value": 1,
             "n_classes": config_file.n_label,
