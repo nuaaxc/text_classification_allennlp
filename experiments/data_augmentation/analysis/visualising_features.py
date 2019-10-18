@@ -12,7 +12,7 @@ from config import TRECConfig as ConfigFile
 random_state = 2019
 
 
-def visualise(x, epoch, fill_color, line_color, alpha, markers, is_show=False, is_export=False):
+def visualise(x, epoch, fill_color, line_color, alpha, marker, is_show=False, is_export=False):
     tsne_model = TSNE(n_components=2,
                       perplexity=50,
                       learning_rate=10,
@@ -28,12 +28,12 @@ def visualise(x, epoch, fill_color, line_color, alpha, markers, is_show=False, i
 
     plot.scatter(x=tsne_points[:, 0],
                  y=tsne_points[:, 1],
-                 size=8,
+                 size=10,
                  fill_color=fill_color,
                  line_color=line_color,
                  fill_alpha=alpha,
                  line_alpha=alpha,
-                 marker=markers)
+                 marker=marker)
 
     if is_show:
         show(plot)
@@ -60,25 +60,28 @@ def visualize_features(real_meta_path, gan_meta_path, fake_meta_path, test_meta_
         r_markers = ['circle'] * len(real_training_labels)
         t_markers = ['diamond'] * len(t_labels)
         g_markers = ['triangle'] * len(gen_labels)
-        markers = r_markers + t_markers + g_markers
 
         r_fill_colors = [bpa.all_palettes['Dark2'][6][label] for label in real_training_labels]
-        t_fill_colors = ['blue'] * len(t_labels)
+        # t_fill_colors = ['blue'] * len(t_labels)
+        t_fill_colors = [bpa.all_palettes['Dark2'][6][label] for label in t_labels]
         g_fill_colors = ['white'] * len(gen_labels)
-        fill_colors = r_fill_colors + t_fill_colors + g_fill_colors
 
-        r_line_colors = ['grey'] * len(real_training_labels)
-        t_line_colors = ['grey'] * len(t_labels)
+        r_line_colors = ['white'] * len(real_training_labels)
+        t_line_colors = ['black'] * len(t_labels)
         g_line_colors = [bpa.all_palettes['Dark2'][6][int(label)] for label in gen_labels]
-        line_colors = r_line_colors + t_line_colors + g_line_colors
 
-        r_alphas = [1.] * len(real_training_labels)
-        t_alphas = [0.5] * len(t_labels)
+        r_alphas = [0.5] * len(real_training_labels)
+        t_alphas = [1.] * len(t_labels)
         g_alphas = [1.] * len(gen_labels)
-        alphas = r_alphas + t_alphas + g_alphas
+
         visualise(np.concatenate((real_train_features, t_data, gen_features)),
-                  epoch, fill_colors, line_colors, alphas, markers,
-                  False, True)
+                  epoch,
+                  fill_color=r_fill_colors + t_fill_colors + g_fill_colors,
+                  line_color=r_line_colors + t_line_colors + g_line_colors,
+                  alpha=r_alphas + t_alphas + g_alphas,
+                  marker=r_markers + t_markers + g_markers,
+                  is_show=False,
+                  is_export=True)
 
     # fake_meta_data = torch.load(fake_meta_path % (corpus_name, file_frac))
     # for epoch in fake_meta_data['g_data_epochs'].keys():

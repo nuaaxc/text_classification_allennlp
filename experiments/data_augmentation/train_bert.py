@@ -196,7 +196,7 @@ def experiment_trec(_phase):
             "patience": patience,
 
             "n_epoch_real": 1000,
-            "n_epoch_gan": 600,
+            "n_epoch_gan": 100,
             "n_epoch_fake": 1000,
 
             "batch_per_epoch": batch_per_epoch,
