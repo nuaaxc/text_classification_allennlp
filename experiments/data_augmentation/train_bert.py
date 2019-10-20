@@ -144,8 +144,8 @@ def experiment_trec(_phase):
                 },
                 "feed_forward": {
                     "input_dim": 2 * d_hidden,
-                    "num_layers": 1,
-                    "hidden_dims": d_hidden,
+                    "num_layers": 2,
+                    "hidden_dims": [d_hidden, d_hidden],
                     "activations": "relu",
                     "dropout": dropout
                 },
@@ -160,8 +160,8 @@ def experiment_trec(_phase):
                 },
                 "feed_forward": {
                     "input_dim": 2 * d_hidden,
-                    "num_layers": 2,
-                    "hidden_dims": [d_hidden, 1],
+                    "num_layers": 3,
+                    "hidden_dims": [d_hidden, d_hidden, 1],
                     "activations": "relu",
                     "dropout": dropout
                 },
@@ -180,11 +180,11 @@ def experiment_trec(_phase):
                 "type": "gan",
                 "generator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.0001
+                    "lr": 0.00005
                 },
                 "discriminator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.0001
+                    "lr": 0.00005
                 },
                 "classifier_optimizer": {
                     "type": "adam",
@@ -196,13 +196,12 @@ def experiment_trec(_phase):
             "patience": patience,
 
             "n_epoch_real": 1000,
-            "n_epoch_gan": 100,
+            "n_epoch_gan": 200,
             "n_epoch_fake": 1000,
 
             "batch_per_epoch": batch_per_epoch,
             "batch_per_generator": batch_per_generator,
-            "num_loop_discriminator": 2,
-            "n_batch_fake": 50,
+            "num_loop_discriminator": 5,
             "clip_value": 1,
             "n_classes": config_file.n_label,
 
@@ -246,6 +245,6 @@ def experiment_trec(_phase):
 
 if __name__ == '__main__':
     # phase = 'cls_on_real'
-    phase = 'gan'
-    # phase = 'cls_on_fake'
+    # phase = 'gan'
+    phase = 'cls_on_fake'
     experiment_trec(phase)

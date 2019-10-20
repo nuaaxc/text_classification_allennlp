@@ -43,7 +43,7 @@ def visualise(x, epoch, fill_color, line_color, alpha, marker, is_show=False, is
         print('saved to %s.' % ConfigFile.img_gen_feature_path % epoch)
 
 
-def visualize_features(real_meta_path, gan_meta_path, fake_meta_path, test_meta_path,
+def visualize_features(real_meta_path, gan_meta_path, test_meta_path,
                        corpus_name, file_frac):
     real_meta_data = torch.load(real_meta_path % (corpus_name, file_frac))
     real_train_features, real_training_labels = \
@@ -83,19 +83,15 @@ def visualize_features(real_meta_path, gan_meta_path, fake_meta_path, test_meta_
                   is_show=False,
                   is_export=True)
 
-    # fake_meta_data = torch.load(fake_meta_path % (corpus_name, file_frac))
-    # for epoch in fake_meta_data['g_data_epochs'].keys():
-    #     fake_features = fake_meta_data['g_data_epochs'][epoch]
-    #     colors = [palettes[0]] * real_train_features.shape[0] + [palettes[1]] * fake_features.shape[0]
-    #     visualise(np.concatenate((real_train_features, fake_features)),
-    #               epoch, colors,
-    #               False, True)
-
 
 if __name__ == '__main__':
     visualize_features(ConfigFile.train_real_meta_path,
                        ConfigFile.train_gan_meta_path,
-                       ConfigFile.train_fake_meta_path,
                        ConfigFile.test_meta_path,
                        ConfigFile.corpus_name,
                        ConfigFile.hparam['file_frac'])
+    # visualize_features(ConfigFile.train_real_meta_path,
+    #                    ConfigFile.train_fake_meta_path,
+    #                    ConfigFile.test_meta_path,
+    #                    ConfigFile.corpus_name,
+    #                    ConfigFile.hparam['file_frac'])

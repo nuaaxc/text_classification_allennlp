@@ -176,23 +176,23 @@ class TRECConfig(DirConfig):
     max_seq_len = 30
 
     # hparam = {
-    #     'lr': 0.00002,
-    #     'patience': 5,
-    #     'batch_size': 16,
-    #     'batch_per_epoch': 20,
-    #     'batch_per_generator': 40,
-    #     'd_hidden': 768,
-    #     'dropout': 0.1,
-    #     'cuda_device': 0,
-    #     'file_frac': 5,
+        # 'lr': 0.00002,
+        # 'patience': 5,
+        # 'batch_size': 16,
+        # 'batch_per_epoch': 20,
+        # 'batch_per_generator': 20,
+        # 'd_hidden': 768,
+        # 'dropout': 0.1,
+        # 'cuda_device': 0,
+        # 'file_frac': 5,
     # }
 
     hparam = {
         'lr': 0.00001,
         'patience': 5,
-        'batch_size': 32,
-        'batch_per_epoch': 10,
-        'batch_per_generator': 20,
+        'batch_size': 16,
+        'batch_per_epoch': 30,
+        'batch_per_generator': 30,
         'd_hidden': 768,
         'dropout': 0.1,
         'cuda_device': 0,
