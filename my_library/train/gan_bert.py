@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def aug_normal(f, cuda_device):
-    return f + 0.0001 * torch.randn_like(f).cuda(cuda_device)
+    return f + 0.1 * torch.randn_like(f).cuda(cuda_device)
 
 
 # def aug_uniform(f, cuda_device):
@@ -264,10 +264,10 @@ class GanBertTrainer(TrainerBase):
 
             self.optimizer.zero_grad()
 
-            feature = self.sample_feature(feature_iterator, 0.5)
+            feature = self.sample_feature(feature_iterator, 0.1)
 
             choice: float = random.random()
-            if choice > 0.5:
+            if choice > 0.1:
                 f_aug = aug_normal(feature['feature'], self.cuda_device)
                 generated = self.model.generator(f_aug, feature["label"])['output']
 
