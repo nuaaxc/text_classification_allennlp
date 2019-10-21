@@ -85,13 +85,13 @@ def visualize_features(real_meta_path, gan_meta_path, test_meta_path,
 
 
 if __name__ == '__main__':
-    # visualize_features(ConfigFile.train_real_meta_path,
-    #                    ConfigFile.train_gan_meta_path,
-    #                    ConfigFile.test_meta_path,
-    #                    ConfigFile.corpus_name,
-    #                    ConfigFile.hparam['file_frac'])
     visualize_features(ConfigFile.train_real_meta_path,
-                       ConfigFile.train_fake_meta_path,
+                       ConfigFile.train_gan_meta_path,
                        ConfigFile.test_meta_path,
                        ConfigFile.corpus_name,
                        ConfigFile.hparam['file_frac'])
+    # visualize_features(ConfigFile.train_real_meta_path,
+    #                    ConfigFile.train_fake_meta_path,
+    #                    ConfigFile.test_meta_path,
+    #                    ConfigFile.corpus_name,
+    #                    ConfigFile.hparam['file_frac'])

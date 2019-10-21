@@ -38,14 +38,14 @@ def aug_normal(f, cuda_device):
 #     return f + 0.001 * torch.rand_like(f).cuda(cuda_device)
 
 
-def compute_gradient_penalty(D, h_real, h_fake, labels, cuda_device):
+def compute_gradient_penalty(D, h_real, h_fake, label, cuda_device):
     """Calculates the gradient penalty loss for WGAN GP"""
 
     alpha = torch.rand(h_real.size(0), 1).cuda(cuda_device)
     differences = h_fake - h_real
     interpolates = h_real + (alpha * differences)
     interpolates = interpolates.cuda(cuda_device).requires_grad_()
-    d_interpolates = D(interpolates, labels)["output"]
+    d_interpolates = D(interpolates, label)["output"]
 
     # Get gradient w.r.t. interpolates
     gradients = torch.autograd.grad(
@@ -85,6 +85,7 @@ class GanBertTrainer(TrainerBase):
                  batch_size: int = 16,
                  cuda_device: int = 0,
                  patience: int = 5,
+                 conservative_rate: float = 1.0,
                  num_serialized_models_to_keep: int = 1,
                  keep_serialized_model_every_num_seconds: int = None,
                  num_loop_discriminator: int = 5,
@@ -128,6 +129,7 @@ class GanBertTrainer(TrainerBase):
                                           keep_serialized_model_every_num_seconds,
                                           num_serialized_models_to_keep)
 
+        self.conservative_rate = conservative_rate
         self.num_loop_discriminator = num_loop_discriminator
         self.batch_per_epoch = batch_per_epoch
         self.batch_per_generator = batch_per_generator
@@ -142,7 +144,7 @@ class GanBertTrainer(TrainerBase):
 
         self.aug_features = []
 
-    def _train_discriminator(self, f, f_aug, label):
+    def _train_discriminator(self, f, noise, label):
         self.optimizer.stage = 'discriminator'
         self.optimizer.zero_grad()
 
@@ -153,16 +155,16 @@ class GanBertTrainer(TrainerBase):
         real_validity = self.model.discriminator(f, label)["output"]
 
         # Fake example
-        # fake_data = self.model.generator(noise["array"], noise["label"])["output"].detach()
-        fake_data = self.model.generator(f_aug, label)["output"].detach()
+        fake_data = self.model.generator(f, noise, label)["output"].detach()
         fake_validity = self.model.discriminator(fake_data, label)["output"]
 
         # Gradient penalty
         gradient_penalty = compute_gradient_penalty(self.model.discriminator,
-                                                    f.data,
-                                                    fake_data.data,
-                                                    torch.randint_like(label, 0, self.n_classes),
-                                                    self.cuda_device)
+                                                    h_real=f.data,
+                                                    h_fake=fake_data.data,
+                                                    # torch.randint_like(label, 0, self.n_classes),
+                                                    label=label,
+                                                    cuda_device=self.cuda_device)
 
         d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10. * gradient_penalty
 
@@ -175,17 +177,17 @@ class GanBertTrainer(TrainerBase):
 
         return d_error.item()
 
-    def _train_generator(self, f_aug, label):
+    def _train_generator(self, f, noise, label):
         self.optimizer.stage = 'generator'
         self.optimizer.zero_grad()
 
         for p in self.model.discriminator.parameters():
             p.requires_grad = False
 
-        generated_features = self.model.generator(f_aug, label, self.model.discriminator)
-        cls_error = self.model.classifier(generated_features['output'], label)['loss']
+        generated = self.model.generator(f, noise, label, self.model.discriminator)
+        cls_error = self.model.classifier(generated['output'], label)['loss']
 
-        fake_error = generated_features["loss"] + cls_error
+        fake_error = generated["loss"] + cls_error
 
         fake_error.backward()
         self.optimizer.step()
@@ -254,6 +256,7 @@ class GanBertTrainer(TrainerBase):
             p.requires_grad = False
 
         feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
+        noise_iterator = self.noise_iterator(self.noise_dataset)
         loop = Tqdm.tqdm(range(self.batch_per_epoch))
 
         g_data = []
@@ -264,22 +267,23 @@ class GanBertTrainer(TrainerBase):
 
             self.optimizer.zero_grad()
 
-            feature = self.sample_feature(feature_iterator, 0.1)
+            f = self.sample_feature(feature_iterator, self.conservative_rate)
+            noise = next(noise_iterator)['array']
+            noise = nn_util.move_to_device(noise, self.cuda_device)
 
             choice: float = random.random()
             if choice > 0.1:
-                f_aug = aug_normal(feature['feature'], self.cuda_device)
-                generated = self.model.generator(f_aug, feature["label"])['output']
+                generated = self.model.generator(f['feature'], noise, f['label'])['output']
 
                 self.aug_features.append({'feature': generated.data.cpu(),
-                                          'label': feature['label'].data.cpu()})
+                                          'label': f['label'].data.cpu()})
 
                 g_data.append(generated.data.cpu().numpy())
-                g_label.extend(feature['label'].data.cpu().numpy())
+                g_label.extend(f['label'].data.cpu().numpy())
 
-                cls_error = self.model.classifier(generated, feature['label'])['loss']
+                cls_error = self.model.classifier(generated, f['label'])['loss']
             else:
-                cls_error = self.model.classifier(feature['feature'], feature['label'])['loss']
+                cls_error = self.model.classifier(f['feature'], f['label'])['loss']
 
             cls_error.backward()
             cls_loss += cls_error.mean().item()
@@ -296,9 +300,12 @@ class GanBertTrainer(TrainerBase):
 
         return {'cls_loss_on_fake': cls_loss / batches_this_loop}, np.vstack(g_data), g_label
 
-    def sample_feature(self, feature_iterator, threshold):
+    def sample_feature(self, feature_iterator, conservative_rate):
+        """
+        Sample from a real feature or a generated feature
+        """
         choice: float = random.random()
-        if len(self.aug_features) == 0 or choice < threshold:
+        if len(self.aug_features) == 0 or choice > conservative_rate:
             feature = next(feature_iterator)
         else:
             feature = random.sample(self.aug_features, 1)[0]
@@ -309,7 +316,7 @@ class GanBertTrainer(TrainerBase):
         loss_d = []
         loss_g = []
         feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
-
+        noise_iterator = self.noise_iterator(self.noise_dataset)
         # Freeze the classifier
         for p in self.model.classifier.parameters():
             p.requires_grad = False
@@ -323,19 +330,23 @@ class GanBertTrainer(TrainerBase):
             # ##############
             # discriminator
             # ##############
-            feature = self.sample_feature(feature_iterator, 0.5)
-            f_aug = aug_normal(feature['feature'], self.cuda_device)
+            f = self.sample_feature(feature_iterator, self.conservative_rate)
+            noise = next(noise_iterator)['array']
+            noise = nn_util.move_to_device(noise, self.cuda_device)
 
-            _loss_d = self._train_discriminator(feature['feature'], f_aug, feature['label'])
+            _loss_d = self._train_discriminator(f['feature'],
+                                                noise,
+                                                f['label'])
             loss_d.append(_loss_d)
 
             if (i + 1) % self.num_loop_discriminator == 0:
                 # ##########
                 # generator
                 # ##########
-                feature = self.sample_feature(feature_iterator, 0.5)
-                f_aug = aug_normal(feature['feature'], self.cuda_device)
-                _loss_g = self._train_generator(f_aug, feature['label'])
+                f = self.sample_feature(feature_iterator, self.conservative_rate)
+                noise = next(noise_iterator)['array']
+                noise = nn_util.move_to_device(noise, self.cuda_device)
+                _loss_g = self._train_generator(f['feature'], noise, f['label'])
                 loss_g.append(_loss_g)
 
         # #################
@@ -346,15 +357,15 @@ class GanBertTrainer(TrainerBase):
         print(len(self.aug_features))
 
         for i in range(self.batch_per_generator):
-            feature = self.sample_feature(feature_iterator, 0.5)
-            # print(feature)
-            f_aug = aug_normal(feature['feature'], self.cuda_device)
-            generated = self.model.generator(f_aug, feature['label'])['output']
+            f = self.sample_feature(feature_iterator, self.conservative_rate)
+            noise = next(noise_iterator)['array']
+            noise = nn_util.move_to_device(noise, self.cuda_device)
+            generated = self.model.generator(f['feature'], noise, f['label'])['output']
             self.aug_features.append({'feature': generated.data.cpu(),
-                                      'label': feature['label'].data.cpu()})
+                                      'label': f['label'].data.cpu()})
 
             g_data.append(generated.data.cpu().numpy())
-            g_label.extend(feature['label'].data.cpu().numpy())
+            g_label.extend(f['label'].data.cpu().numpy())
         return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data), g_label
 
     def _train_epoch(self, epoch: int) -> Any:
@@ -689,6 +700,7 @@ class GanBertTrainer(TrainerBase):
         n_epoch_fake = params.pop_int("n_epoch_fake")
         batch_size = params.pop_int("batch_size")
         patience = params.pop_int("patience")
+        conservative_rate=params.pop_int("conservative_rate")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
         batch_per_generator = params.pop_int("batch_per_generator")
@@ -724,6 +736,7 @@ class GanBertTrainer(TrainerBase):
                    batch_size=batch_size,
                    cuda_device=cuda_device,
                    patience=patience,
+                   conservative_rate=conservative_rate,
                    num_loop_discriminator=num_loop_discriminator,
                    batch_per_epoch=batch_per_epoch,
                    batch_per_generator=batch_per_generator,
