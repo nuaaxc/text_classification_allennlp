@@ -700,7 +700,7 @@ class GanBertTrainer(TrainerBase):
         n_epoch_fake = params.pop_int("n_epoch_fake")
         batch_size = params.pop_int("batch_size")
         patience = params.pop_int("patience")
-        conservative_rate=params.pop_int("conservative_rate")
+        conservative_rate = params.pop_float("conservative_rate")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
         batch_per_generator = params.pop_int("batch_per_generator")

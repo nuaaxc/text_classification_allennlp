@@ -253,7 +253,7 @@ def experiment_trec(_phase):
 
 
 if __name__ == '__main__':
-    phase = 'cls_on_real'
-    # phase = 'gan'
+    # phase = 'cls_on_real'
+    phase = 'gan'
     # phase = 'cls_on_fake'
     experiment_trec(phase)

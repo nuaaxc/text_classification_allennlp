@@ -178,7 +178,7 @@ class TRECConfig(DirConfig):
     hparam = {
         'lr': 0.00001,
         'patience': 15,
-        'conservative_rate': 0.9,
+        'conservative_rate': 0.5,
         'batch_size': 16,
         'batch_per_epoch': 20,
         'batch_per_generator': 30,
