@@ -102,15 +102,13 @@ def train_dev_split(train_raw_path,
     print('[saved]')
 
 
-def dataset_stance():
-    sample_ratio = 0.3
-    stance_target = 'a'
-    train_dev_split(train_raw_path=StanceConfig.train_raw_path % stance_target,
-                    train_ratio_path=StanceConfig.train_ratio_path % (stance_target, int(sample_ratio * 100)),
-                    dev_ratio_path=StanceConfig.dev_ratio_path % (stance_target, int(sample_ratio * 100)),
-                    test_raw_path=StanceConfig.test_raw_path % stance_target,
-                    test_path=StanceConfig.test_path % stance_target,
-                    encoding='windows-1251',
+def dataset_stance(sample_ratio):
+    train_dev_split(train_raw_path=StanceConfig.train_raw_path_all,
+                    train_ratio_path=StanceConfig.train_ratio_path % int(sample_ratio * 100),
+                    dev_ratio_path=StanceConfig.dev_ratio_path % int(sample_ratio * 100),
+                    test_raw_path=StanceConfig.test_raw_path_all,
+                    test_path=StanceConfig.test_path,
+                    encoding='utf-8',
                     sep='\t',
                     label_index=3,
                     text_index=2,
@@ -136,4 +134,5 @@ def dataset_TREC(sample_ratio):
 
 
 if __name__ == '__main__':
-    dataset_TREC(sample_ratio=0.05)
+    # dataset_TREC(sample_ratio=0.05)
+    dataset_stance(sample_ratio=1.)

@@ -10,6 +10,7 @@ from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers import Tokenizer, WordTokenizer
 
+from config import StanceConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -85,10 +86,22 @@ def baby_mention_stats():
     print(c)
 
 
+def merge_all_stance_target(input_file_path, output_file_path):
+    with open(output_file_path, 'w', encoding='utf-8') as f_out:
+        f_out.write('ID\tTarget\tTweet\tStance\n')
+        for stance_target in StanceConfig.target:
+            print('processing %s ...' % stance_target)
+            with open(input_file_path % stance_target, encoding='windows-1251') as f_in:
+                next(f_in)
+                for line in f_in:
+                    f_out.write(line)
+
+
 if __name__ == '__main__':
-    baby_mention_stats()
-
-
+    # baby_mention_stats()
+    # merge_all_stance_target(StanceConfig.train_raw_path, StanceConfig.train_raw_path_all)
+    # merge_all_stance_target(StanceConfig.test_raw_path, StanceConfig.test_raw_path_all)
+    pass
 
 
 

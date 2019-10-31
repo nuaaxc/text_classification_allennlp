@@ -160,10 +160,14 @@ class StanceConfig(DirConfig):
     model_path = os.path.join(model_dir, 'model_%s.th')
 
     train_raw_path = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-%s.txt')
-    train_ratio_path = os.path.join(data_dir, 'train_%s_%sp.txt')
-    dev_ratio_path = os.path.join(data_dir, 'dev_%s_%sp.txt')
+    train_raw_path_all = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-all.txt')
+    train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
+
+    dev_ratio_path = os.path.join(data_dir, 'dev_%sp.txt')
+
     test_raw_path = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-%s.txt')
-    test_path = os.path.join(data_dir, 'test_%s.txt')
+    test_raw_path_all = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-all.txt')
+    test_path = os.path.join(data_dir, 'test.txt')
 
     train_meta_path = os.path.join(result_dir, 'train_meta_%s.th')
     test_meta_path = os.path.join(result_dir, 'test_meta_%s.th')
