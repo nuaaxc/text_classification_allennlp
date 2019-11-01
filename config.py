@@ -20,6 +20,10 @@ class DirConfig(object):
         BERT_VOC = ''
         BERT_MODEL = ''
 
+    phase_real = 'cls_on_real'
+    phase_gan = 'gan'
+    phase_fake = 'cls_on_fake'
+
 
 class DBPediaConfig(DirConfig):
     corpus_name = 'DBPedia'
@@ -91,55 +95,27 @@ class StanceConfig(DirConfig):
     max_seq_len = 30
 
     hparam = {
-        'a': {
-            'lr': 0.00005,
-            'epochs': 1000,
-            'patience': 10,
-            'batch_size': 9,
-            'd_word_emb': 300,
-            'd_rnn': 128,
-            'd_hidden': 100,
-            'dropout': 0.3,
-            'lambda': 0,
-            'cuda_device': 0,
-            'file_frac': 30,
-        },
-
-        'cc': {
-            'lr': 0.00005,
-            'epochs': 1000,
-            'patience': 10,
-            'batch_size': 16,
-            'd_word_emb': 300,
-            'd_rnn': 128,
-            'd_hidden': 100,
-            'dropout': 0.2,
-            'lambda': 0,
-            'cuda_device': 0,
-            'file_frac': 100,
-        },
-
-        'la': {
-            'lr': 0.00005,
-            'epochs': 1000,
-            'patience': 10,
-            'batch_size': 8,
-            'd_word_emb': 300,
-            'd_rnn': 128,
-            'd_hidden': 100,
-            'dropout': 0.2,
-            'lambda': 0,
-            'cuda_device': 0,
-            'file_frac': 100,
-        }
+        'lr': 0.00001,
+        'patience': 5,
+        'conservative_rate': 0.5,
+        'batch_size': 16,
+        'batch_per_epoch': 20,
+        'batch_per_generator': 30,
+        'd_hidden': 768,
+        'dropout': 0.1,
+        'cuda_device': 0,
+        'file_frac': 10,
     }
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/stance')
+        root_local = os.path.join(DirConfig.home, 'Documents/data61/project/text_classification/dataset/stance')
     elif 'home' in DirConfig.home:
         root = '/home/xu052/text_classification/dataset/stance/'
+        root_local = ''
     else:
         root = ''
+        root_local = ''
 
     target = ['a', 'cc', 'fm', 'hc', 'la']
 
@@ -153,8 +129,8 @@ class StanceConfig(DirConfig):
 
     data_dir = os.path.join(root, 'data')
     cache_dir = os.path.join(root, 'cache')
-    model_dir = os.path.join(root, 'models')
-    result_dir = os.path.join(root, 'results')
+    model_dir = os.path.join(root_local, 'models')
+    result_dir = os.path.join(root_local, 'results')
 
     vocab_path = os.path.join(cache_dir, 'vocab')
     model_path = os.path.join(model_dir, 'model_%s.th')
@@ -169,8 +145,10 @@ class StanceConfig(DirConfig):
     test_raw_path_all = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-all.txt')
     test_path = os.path.join(data_dir, 'test.txt')
 
-    train_meta_path = os.path.join(result_dir, 'train_meta_%s.th')
-    test_meta_path = os.path.join(result_dir, 'test_meta_%s.th')
+    train_real_meta_path = os.path.join(result_dir, 'train_real_meta_%s_%sp.th')
+    train_gan_meta_path = os.path.join(result_dir, 'train_gan_meta_%s_%sp.th')
+    train_fake_meta_path = os.path.join(result_dir, 'train_fake_meta_%s_%sp.th')
+    test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
     img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')
 
 
@@ -232,6 +210,4 @@ class TRECConfig(DirConfig):
     test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
     img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')
 
-    phase_real = 'cls_on_real'
-    phase_gan = 'gan'
-    phase_fake = 'cls_on_fake'
+

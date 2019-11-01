@@ -1,75 +1,64 @@
 from typing import Iterator, Dict
 import logging
-import random
-
+import torch
 
 from allennlp.data import Instance
-from allennlp.data.fields import TextField, LabelField, MetadataField
+from allennlp.data.fields import TextField, LabelField, ArrayField
 
 from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
 from allennlp.data.tokenizers import Tokenizer, WordTokenizer
+from allennlp.data.tokenizers.word_filter import StopwordFilter
 
 from config import StanceConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-random.seed(2019)
 
-
-@DatasetReader.register("stance")
+@DatasetReader.register("stance_dataset")
 class StanceDatasetReader(DatasetReader):
     def __init__(self,
                  lazy: bool = False,
-                 tokenizer: Tokenizer = None,
-                 token_indexers: Dict[str, TokenIndexer] = None,
-                 is_train: bool = True) -> None:
+                 tokenizer: WordTokenizer = None,
+                 token_indexers: Dict[str, TokenIndexer] = None) -> None:
         super().__init__(lazy=lazy)
-        self.tokenizer = tokenizer or WordTokenizer()
-        self.token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer()}
-        self._is_train = is_train
-
-    def _read_train(self, file_path: str) -> Iterator[Instance]:
-        F = []
-        A = []
-        N = []
-        with open(file_path, encoding='utf-8') as f:
-            for line in f:
-                label, text = line.strip().split('\t')
-                if label == 'FAVOR':
-                    F.append((label, text))
-                elif label == 'AGAINST':
-                    A.append((label, text))
-                else:
-                    N.append((label, text))
-
-        while True:
-            choice: float = random.random()
-            if choice < 0.333:
-                label, text = random.choice(F)
-            elif choice >= 0.666:
-                label, text = random.choice(A)
-            else:
-                label, text = random.choice(N)
-            yield self.text_to_instance(text, label)
-
-    def _read_val(self, file_path: str) -> Iterator[Instance]:
-        with open(file_path, encoding='utf-8') as f:
-            for line in f:
-                label, text = line.strip().split('\t')
-                yield self.text_to_instance(text, label)
+        self._tokenizer = tokenizer or WordTokenizer(word_filter=StopwordFilter())
+        self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer(lowercase_tokens=True)}
 
     def _read(self, file_path: str) -> Iterator[Instance]:
-        if self._is_train:
-            return self._read_train(file_path)
-        else:
-            return self._read_val(file_path)
+        with open(file_path, encoding='utf-8') as f:
+            for line in f:
+                label, text = line.strip().split('\t')
+                yield self.text_to_instance(label, text)
 
-    def text_to_instance(self, text: str, label: str = None) -> Instance:  # type: ignore
-        fields = {'text': TextField(self.tokenizer.tokenize(text), self.token_indexers)}
+    def text_to_instance(self, label: str, text: str) -> Instance:  # type: ignore
+        tokenized_text = self._tokenizer.tokenize(text)
+        text_field = TextField(tokenized_text, self._token_indexers)
+        fields = {'text': text_field}
         if label is not None:
             fields['label'] = LabelField(label)
         return Instance(fields)
+
+
+@DatasetReader.register("stance_feature")
+class StanceFeatureReader(DatasetReader):
+    def __init__(self,
+                 meta_path: str,
+                 corpus_name: str,
+                 file_frac: int) -> None:
+        super().__init__(lazy=True)
+        self.meta_path = meta_path
+        self.corpus_name = corpus_name
+        self.file_frac = file_frac
+
+    def _read(self, _: str) -> Iterator[Instance]:
+        features = torch.load(self.meta_path % (self.corpus_name, self.file_frac))['training_features']
+        for f in features:
+            yield self.text_to_instance(f)
+
+    def text_to_instance(self, f) -> Instance:  # type: ignore
+        return Instance({"feature": ArrayField(f['feature']),
+                         "label": ArrayField(f['label'])})
 
 
 def baby_mention_stats():

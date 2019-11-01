@@ -7,7 +7,8 @@ from bokeh.io import show, export_png
 from sklearn.manifold import TSNE
 
 # from config import StanceConfig as ConfigFile
-from config import TRECConfig as ConfigFile
+# from config import TRECConfig as ConfigFile
+from config import StanceConfig as ConfigFile
 
 random_state = 2019
 
@@ -61,14 +62,14 @@ def visualize_features(real_meta_path, gan_meta_path, test_meta_path,
         t_markers = ['diamond'] * len(t_labels)
         g_markers = ['triangle'] * len(gen_labels)
 
-        r_fill_colors = [bpa.all_palettes['Dark2'][6][label] for label in real_training_labels]
+        r_fill_colors = [bpa.all_palettes['Dark2'][ConfigFile.n_label][label] for label in real_training_labels]
         # t_fill_colors = ['blue'] * len(t_labels)
-        t_fill_colors = [bpa.all_palettes['Dark2'][6][label] for label in t_labels]
+        t_fill_colors = [bpa.all_palettes['Dark2'][ConfigFile.n_label][label] for label in t_labels]
         g_fill_colors = ['white'] * len(gen_labels)
 
         r_line_colors = ['white'] * len(real_training_labels)
         t_line_colors = ['black'] * len(t_labels)
-        g_line_colors = [bpa.all_palettes['Dark2'][6][int(label)] for label in gen_labels]
+        g_line_colors = [bpa.all_palettes['Dark2'][ConfigFile.n_label][int(label)] for label in gen_labels]
 
         r_alphas = [0.5] * len(real_training_labels)
         t_alphas = [1.] * len(t_labels)

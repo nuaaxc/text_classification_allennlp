@@ -1,6 +1,7 @@
 from typing import Iterator, List, Dict
 import logging
 import torch
+
 from allennlp.data import Instance
 from allennlp.data.fields import TextField, LabelField, ArrayField
 

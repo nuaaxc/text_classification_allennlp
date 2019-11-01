@@ -8,6 +8,7 @@ import random
 
 import sklearn
 import torch
+import torch.nn.functional as F
 
 from allennlp.common.tqdm import Tqdm
 from allennlp.common.file_utils import cached_path
@@ -155,14 +156,13 @@ class GanBertTrainer(TrainerBase):
         real_validity = self.model.discriminator(f, label)["output"]
 
         # Fake example
-        fake_data = self.model.generator(f, noise, label)["output"].detach()
+        fake_data = self.model.generator(f, noise, label=label)["output"].detach()
         fake_validity = self.model.discriminator(fake_data, label)["output"]
 
         # Gradient penalty
         gradient_penalty = compute_gradient_penalty(self.model.discriminator,
                                                     h_real=f.data,
                                                     h_fake=fake_data.data,
-                                                    # torch.randint_like(label, 0, self.n_classes),
                                                     label=label,
                                                     cuda_device=self.cuda_device)
 
@@ -184,12 +184,19 @@ class GanBertTrainer(TrainerBase):
         for p in self.model.discriminator.parameters():
             p.requires_grad = False
 
-        generated = self.model.generator(f, noise, label, self.model.discriminator)
-        cls_error = self.model.classifier(generated['output'], label)['loss']
+        generated = self.model.generator(feature=f,
+                                         noise=noise,
+                                         label=label,
+                                         discriminator=self.model.discriminator)
 
-        fake_error = generated["loss"] + cls_error
+        cls_results = self.model.classifier(generated['output'], label)
+        cls_prediction_syn = cls_results['output']
+        cls_prediction_real = self.model.classifier(f, label)['output']
+        kl = F.kl_div(cls_prediction_syn.log(), cls_prediction_real, reduction='batchmean')
 
+        fake_error = generated["loss"] + cls_results['loss'] + kl
         fake_error.backward()
+
         self.optimizer.step()
 
         return fake_error.item()
@@ -327,25 +334,22 @@ class GanBertTrainer(TrainerBase):
 
         # train on this epoch
         for i in range(self.batch_per_epoch):
-            # ##############
-            # discriminator
-            # ##############
             f = self.sample_feature(feature_iterator, self.conservative_rate)
             noise = next(noise_iterator)['array']
             noise = nn_util.move_to_device(noise, self.cuda_device)
-
-            _loss_d = self._train_discriminator(f['feature'],
-                                                noise,
-                                                f['label'])
+            # ##############
+            # discriminator
+            # ##############
+            _loss_d = self._train_discriminator(f['feature'], noise, f['label'])
             loss_d.append(_loss_d)
 
             if (i + 1) % self.num_loop_discriminator == 0:
-                # ##########
-                # generator
-                # ##########
                 f = self.sample_feature(feature_iterator, self.conservative_rate)
                 noise = next(noise_iterator)['array']
                 noise = nn_util.move_to_device(noise, self.cuda_device)
+                # ##########
+                # generator
+                # ##########
                 _loss_g = self._train_generator(f['feature'], noise, f['label'])
                 loss_g.append(_loss_g)
 
