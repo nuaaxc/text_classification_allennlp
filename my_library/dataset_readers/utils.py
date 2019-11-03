@@ -25,7 +25,7 @@ class UniformSampler(InputSampler):
     Sample from the uniform [0, 1] distribution.
     """
     def sample(self, *dims: int) -> np.ndarray:
-        return np.random.uniform(0, 1, dims)
+        return 0.0001 * np.random.uniform(0, 1, dims)
 
 
 @InputSampler.register('normal')
@@ -38,7 +38,7 @@ class NormalSampler(InputSampler):
         self.stdev = stdev
 
     def sample(self, *dims: int) -> np.ndarray:
-        return np.random.normal(self.mean, self.stdev, dims)
+        return 0.0001 * np.random.normal(self.mean, self.stdev, dims)
 
 
 @DatasetReader.register("sampling")

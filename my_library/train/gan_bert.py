@@ -92,6 +92,7 @@ class GanBertTrainer(TrainerBase):
                  num_loop_discriminator: int = 5,
                  batch_per_epoch: int = 10,
                  batch_per_generator: int = 10,
+                 gen_step: int = 10,
                  clip_value: float = 1,
                  n_classes: int = 0,
                  phase: str = None,
@@ -134,6 +135,7 @@ class GanBertTrainer(TrainerBase):
         self.num_loop_discriminator = num_loop_discriminator
         self.batch_per_epoch = batch_per_epoch
         self.batch_per_generator = batch_per_generator
+        self.gen_step = gen_step
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
@@ -194,7 +196,7 @@ class GanBertTrainer(TrainerBase):
         cls_prediction_real = self.model.classifier(f, label)['output']
         kl = F.kl_div(cls_prediction_syn.log(), cls_prediction_real, reduction='batchmean')
 
-        fake_error = generated["loss"] + cls_results['loss'] + kl
+        fake_error = generated["loss"] + 10 * cls_results['loss'] + 10 * kl
         fake_error.backward()
 
         self.optimizer.step()
@@ -250,21 +252,7 @@ class GanBertTrainer(TrainerBase):
 
         self.optimizer.stage = 'classifier'
 
-        # freeze generator
-        for p in self.model.generator.parameters():
-            p.requires_grad = False
-
-        # Unfreeze the classifier
-        for p in self.model.classifier.parameters():
-            p.requires_grad = True
-
-        # Unfreeze the feature extractor
-        for p in self.model.feature_extractor.parameters():
-            p.requires_grad = False
-
-        feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
-        noise_iterator = self.noise_iterator(self.noise_dataset)
-        loop = Tqdm.tqdm(range(self.batch_per_epoch))
+        loop = Tqdm.tqdm(range(len(self.aug_features)))
 
         g_data = []
         g_label = []
@@ -274,23 +262,12 @@ class GanBertTrainer(TrainerBase):
 
             self.optimizer.zero_grad()
 
-            f = self.sample_feature(feature_iterator, self.conservative_rate)
-            noise = next(noise_iterator)['array']
-            noise = nn_util.move_to_device(noise, self.cuda_device)
+            f = random.sample(self.aug_features, 1)[0]
+            f = nn_util.move_to_device(f, self.cuda_device)
+            cls_error = self.model.classifier(f['feature'], f['label'])['loss']
 
-            choice: float = random.random()
-            if choice > 0.1:
-                generated = self.model.generator(f['feature'], noise, f['label'])['output']
-
-                self.aug_features.append({'feature': generated.data.cpu(),
-                                          'label': f['label'].data.cpu()})
-
-                g_data.append(generated.data.cpu().numpy())
-                g_label.extend(f['label'].data.cpu().numpy())
-
-                cls_error = self.model.classifier(generated, f['label'])['loss']
-            else:
-                cls_error = self.model.classifier(f['feature'], f['label'])['loss']
+            g_data.append(f['feature'].data.cpu().numpy())
+            g_label.extend(f['label'].data.cpu().numpy())
 
             cls_error.backward()
             cls_loss += cls_error.mean().item()
@@ -302,8 +279,6 @@ class GanBertTrainer(TrainerBase):
                 training_util.description_from_metrics({'cls_loss_on_fake': cls_loss / batches_this_loop}),
                 refresh=False
             )
-        assert len(g_data) > 0
-        assert len(g_label) > 0
 
         return {'cls_loss_on_fake': cls_loss / batches_this_loop}, np.vstack(g_data), g_label
 
@@ -371,6 +346,27 @@ class GanBertTrainer(TrainerBase):
             g_data.append(generated.data.cpu().numpy())
             g_label.extend(f['label'].data.cpu().numpy())
         return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data), g_label
+
+    def feature_generation(self, K):
+        aug_features = []
+        feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
+        noise_iterator = self.noise_iterator(self.noise_dataset)
+        for k in range(K):
+            for n in range(self.batch_per_epoch):
+                if k == 0:
+                    f = next(feature_iterator)
+                    aug_features.append({'feature': f['feature'], 'label': f['label']})
+                else:
+                    noise = next(noise_iterator)['array']
+                    noise = nn_util.move_to_device(noise, self.cuda_device)
+
+                    f = random.sample(aug_features, 1)[0]
+                    f = nn_util.move_to_device(f, self.cuda_device)
+
+                    generated = self.model.generator(f['feature'], noise, f['label'])['output']
+                    aug_features.append({'feature': generated.data.cpu(),
+                                         'label': f['label'].data.cpu()})
+        return aug_features
 
     def _train_epoch(self, epoch: int) -> Any:
 
@@ -466,10 +462,22 @@ class GanBertTrainer(TrainerBase):
             if best_model_state:
                 self.model.load_state_dict(best_model_state)
                 logger.info('[Loaded]')
+                # freeze generator
+                for p in self.model.generator.parameters():
+                    p.requires_grad = False
+                # Unfreeze the classifier
+                for p in self.model.classifier.parameters():
+                    p.requires_grad = True
+                # freeze the feature extractor
+                for p in self.model.feature_extractor.parameters():
+                    p.requires_grad = False
+                logger.info('[Feature generation] generating features ...')
+                self.aug_features = self.feature_generation(self.gen_step)
+                logger.info('[Feature generation] %s features generated.' % len(self.aug_features))
 
-        r_data_epochs = {}      # training data (real)
-        g_data_epochs = {}      # training data (generated)
-        v_data_epochs = None    # validation data
+        r_data_epochs = {}  # training data (real)
+        g_data_epochs = {}  # training data (generated)
+        v_data_epochs = None  # validation data
         d_loss_epochs = {}
         g_loss_epochs = {}
         gan_loss_epochs = {}
@@ -708,6 +716,7 @@ class GanBertTrainer(TrainerBase):
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
         batch_per_generator = params.pop_int("batch_per_generator")
+        gen_step = params.pop_int("gen_step")
         clip_value = params.pop_int("clip_value")
         n_classes = params.pop_int("n_classes")
         phase = params.pop("phase")
@@ -744,6 +753,7 @@ class GanBertTrainer(TrainerBase):
                    num_loop_discriminator=num_loop_discriminator,
                    batch_per_epoch=batch_per_epoch,
                    batch_per_generator=batch_per_generator,
+                   gen_step=gen_step,
                    clip_value=clip_value,
                    n_classes=n_classes,
                    phase=phase,

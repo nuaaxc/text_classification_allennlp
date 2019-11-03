@@ -2,6 +2,7 @@ import os
 
 
 class DirConfig(object):
+    project_name = 'text_classification'
     home = str(os.path.expanduser('~'))
     if 'C:' in home:
         W2V_DIR = os.path.join(home, 'Downloads/dataset/word_vec/')
@@ -20,9 +21,9 @@ class DirConfig(object):
         BERT_VOC = ''
         BERT_MODEL = ''
 
-    phase_real = 'cls_on_real'
-    phase_gan = 'gan'
-    phase_fake = 'cls_on_fake'
+    phase_real_str = 'cls_on_real'
+    phase_gan_str = 'gan'
+    phase_fake_str = 'cls_on_fake'
 
 
 class DBPediaConfig(DirConfig):
@@ -94,22 +95,41 @@ class StanceConfig(DirConfig):
     max_vocab_size = 10000
     max_seq_len = 30
 
-    hparam = {
-        'lr': 0.00001,
-        'patience': 5,
-        'conservative_rate': 0.5,
-        'batch_size': 16,
-        'batch_per_epoch': 20,
-        'batch_per_generator': 30,
-        'd_hidden': 768,
-        'dropout': 0.1,
-        'cuda_device': 0,
-        'file_frac': 10,
-    }
+    class HP:
+        # phase = 'cls_on_real'
+        # phase = 'gan'
+        phase = 'cls_on_fake'
+
+        training_size = {
+            '5': 129,
+            '10': 260,
+            '20': 523,
+            '40': 1047,
+            '80': 2096,
+            '100': 2621,
+        }
+        file_ratio = 40
+        lr = 0.00001
+        patience = 15
+        gen_step = 64 + 1
+
+        n_epoch_gan = 500
+        conservative_rate = 0.1
+        batch_size = 16
+        alpha = 1
+        if phase == DirConfig.phase_gan_str:
+            alpha = 5
+        batch_per_epoch = alpha * (int(training_size[str(file_ratio)] / batch_size) + 1)
+        batch_per_generator = 20
+        d_hidden = 768
+        dropout = 0.1
+        cuda_device = 0
 
     if 'C:' in DirConfig.home:
-        root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/stance')
-        root_local = os.path.join(DirConfig.home, 'Documents/data61/project/text_classification/dataset/stance')
+        root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
+                            % (DirConfig.project_name, corpus_name))
+        root_local = os.path.join(DirConfig.home, 'Documents/data61/project/%s/dataset/%s'
+                                  % (DirConfig.project_name, corpus_name))
     elif 'home' in DirConfig.home:
         root = '/home/xu052/text_classification/dataset/stance/'
         root_local = ''
@@ -136,13 +156,15 @@ class StanceConfig(DirConfig):
     model_path = os.path.join(model_dir, 'model_%s.th')
 
     train_raw_path = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-%s.txt')
-    train_raw_path_all = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-all.txt')
+    train_raw_path_all_target = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-all.txt')
+    train_path = os.path.join(data_dir, 'train_100p.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
 
+    dev_path = os.path.join(data_dir, 'dev.txt')
     dev_ratio_path = os.path.join(data_dir, 'dev_%sp.txt')
 
     test_raw_path = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-%s.txt')
-    test_raw_path_all = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-all.txt')
+    test_raw_path_all_target = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-all.txt')
     test_path = os.path.join(data_dir, 'test.txt')
 
     train_real_meta_path = os.path.join(result_dir, 'train_real_meta_%s_%sp.th')
@@ -164,6 +186,7 @@ class TRECConfig(DirConfig):
         'batch_size': 16,
         'batch_per_epoch': 20,
         'batch_per_generator': 30,
+        'gen_step': 10,
         'd_hidden': 768,
         'dropout': 0.1,
         'cuda_device': 0,
@@ -171,8 +194,10 @@ class TRECConfig(DirConfig):
     }
 
     if 'C:' in DirConfig.home:
-        root = os.path.join(DirConfig.home, 'OneDrive/data61/project/text_classification/dataset/TREC')
-        root_local = os.path.join(DirConfig.home, 'Documents/data61/project/text_classification/dataset/TREC')
+        root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
+                            % (DirConfig.project_name, corpus_name))
+        root_local = os.path.join(DirConfig.home, 'Documents/data61/project/%s/dataset/%s'
+                                  % (DirConfig.project_name, corpus_name))
     elif 'home' in DirConfig.home:
         root = '/home/xu052/text_classification/dataset/TREC/'
         root_local = ''

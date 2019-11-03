@@ -15,48 +15,45 @@ from config import StanceConfig, DirConfig
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 logging.getLogger().setLevel(logging.INFO)
 
-torch.manual_seed(2019)
-random.seed(2019)
-np.random.seed(2019)
+seed = 2020
+
+torch.manual_seed(seed)
+random.seed(seed)
+np.random.seed(seed)
 
 
-def experiment_stance(_phase):
-    """
-    phase = 'cls_on_real'
-    phase = 'gan'
-    phase = 'cls_on_fake'
-    """
-    config_file = StanceConfig
-    hparam = config_file.hparam
-    model_real_dir = os.path.join(config_file.model_dir,
-                                  '_'.join(['ph', config_file.phase_real,
-                                            'lr', str(hparam['lr']),
-                                            'bs', str(hparam['batch_size']),
-                                            'h', str(hparam['d_hidden']),
-                                            'dp', str(hparam['dropout']),
-                                            'frac', str(hparam['file_frac'])
+def experiment_stance():
+    cfg = StanceConfig
+    _phase = cfg.HP.phase
+    model_real_dir = os.path.join(cfg.model_dir,
+                                  '_'.join(['ph', cfg.phase_real_str,
+                                            'lr', str(cfg.HP.lr),
+                                            'bs', str(cfg.HP.batch_size),
+                                            'h', str(cfg.HP.d_hidden),
+                                            'dp', str(cfg.HP.dropout),
+                                            'r', str(cfg.HP.file_ratio)
                                             ]))
-    model_gan_dir = os.path.join(config_file.model_dir,
-                                 '_'.join(['ph', config_file.phase_gan,
-                                           'lr', str(hparam['lr']),
-                                           'bs', str(hparam['batch_size']),
-                                           'h', str(hparam['d_hidden']),
-                                           'dp', str(hparam['dropout']),
-                                           'frac', str(hparam['file_frac'])
+    model_gan_dir = os.path.join(cfg.model_dir,
+                                 '_'.join(['ph', cfg.phase_gan_str,
+                                           'lr', str(cfg.HP.lr),
+                                           'bs', str(cfg.HP.batch_size),
+                                           'h', str(cfg.HP.d_hidden),
+                                           'dp', str(cfg.HP.dropout),
+                                           'r', str(cfg.HP.file_ratio)
                                            ]))
-    model_fake_dir = os.path.join(config_file.model_dir,
-                                  '_'.join(['ph', config_file.phase_fake,
-                                            'lr', str(hparam['lr']),
-                                            'bs', str(hparam['batch_size']),
-                                            'h', str(hparam['d_hidden']),
-                                            'dp', str(hparam['dropout']),
-                                            'frac', str(hparam['file_frac'])
+    model_fake_dir = os.path.join(cfg.model_dir,
+                                  '_'.join(['ph', cfg.phase_fake_str,
+                                            'lr', str(cfg.HP.lr),
+                                            'bs', str(cfg.HP.batch_size),
+                                            'h', str(cfg.HP.d_hidden),
+                                            'dp', str(cfg.HP.dropout),
+                                            'r', str(cfg.HP.file_ratio)
                                             ]))
-    if _phase == config_file.phase_real:
+    if _phase == cfg.phase_real_str:
         model_dir = model_real_dir
-    elif _phase == config_file.phase_gan:
+    elif _phase == cfg.phase_gan_str:
         model_dir = model_gan_dir
-    elif _phase == config_file.phase_fake:
+    elif _phase == cfg.phase_fake_str:
         model_dir = model_fake_dir
     else:
         raise ValueError('unknown training phase name %s.' % _phase)
@@ -64,23 +61,25 @@ def experiment_stance(_phase):
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
-    n_classes = config_file.n_label
-    batch_size = hparam['batch_size']
-    lr = hparam['lr']
-    d_hidden = hparam['d_hidden']
-    dropout = hparam['dropout']
-    cuda_device = hparam['cuda_device']
-    patience = hparam['patience']
-    conservative_rate = hparam['conservative_rate']
-    batch_per_epoch = hparam['batch_per_epoch']
-    batch_per_generator = hparam['batch_per_generator']
+    n_classes = cfg.n_label
+    batch_size = cfg.HP.batch_size
+    lr = cfg.HP.lr
+    d_hidden = cfg.HP.d_hidden
+    dropout = cfg.HP.dropout
+    cuda_device = cfg.HP.cuda_device
+    patience = cfg.HP.patience
+    conservative_rate = cfg.HP.conservative_rate
+    batch_per_epoch = cfg.HP.batch_per_epoch
+    batch_per_generator = cfg.HP.batch_per_generator
+    gen_step = cfg.HP.gen_step
+    n_epoch_gan = cfg.HP.n_epoch_gan
 
     params_ = Params(
         {
-            "config_file": config_file,
-            "training_file": config_file.train_ratio_path % hparam['file_frac'],
-            "dev_file": config_file.dev_ratio_path % hparam['file_frac'],
-            "test_file": config_file.test_path,
+            "config_file": cfg,
+            "training_file": cfg.train_ratio_path % cfg.HP.file_ratio,
+            "dev_file": cfg.dev_path,
+            "test_file": cfg.test_path,
             "trainer": {
                 "type": "gan-bert"
             },
@@ -101,15 +100,15 @@ def experiment_stance(_phase):
             },
             "noise_reader": {
                 "type": "sampling",
-                "sampler": {"type": "uniform"},
+                "sampler": {"type": "normal"},
                 "dim": d_hidden,
-                "label_set": config_file.labels
+                "label_set": cfg.labels
             },
             "feature_reader": {
                 "type": "trec_feature",
-                "meta_path": config_file.train_real_meta_path,
-                "corpus_name": config_file.corpus_name,
-                "file_frac": hparam['file_frac']
+                "meta_path": cfg.train_real_meta_path,
+                "corpus_name": cfg.corpus_name,
+                "file_frac": cfg.HP.file_ratio
             },
             # Iterators
             "training_iterator": {
@@ -145,15 +144,15 @@ def experiment_stance(_phase):
                 },
                 "perturb": {
                     "input_dim": 2 * d_hidden,
-                    "num_layers": 2,
-                    "hidden_dims": [d_hidden, d_hidden],
+                    "num_layers": 1,
+                    "hidden_dims": d_hidden,
                     "activations": "relu",
                     "dropout": dropout
                 },
                 "feed_forward": {
                     "input_dim": 2 * d_hidden,
-                    "num_layers": 2,
-                    "hidden_dims": [d_hidden, d_hidden],
+                    "num_layers": 1,
+                    "hidden_dims": d_hidden,
                     "activations": "relu",
                     "dropout": dropout
                 },
@@ -178,8 +177,8 @@ def experiment_stance(_phase):
                 "type": "classifier-base",
                 "feed_forward": {
                     "input_dim": d_hidden,
-                    "num_layers": 2,
-                    "hidden_dims": [d_hidden, n_classes],
+                    "num_layers": 3,
+                    "hidden_dims": [d_hidden, d_hidden, n_classes],
                     "activations": "relu",
                     "dropout": dropout
                 },
@@ -205,14 +204,15 @@ def experiment_stance(_phase):
             "conservative_rate": conservative_rate,
 
             "n_epoch_real": 1000,
-            "n_epoch_gan": 100,
+            "n_epoch_gan": n_epoch_gan,
             "n_epoch_fake": 1000,
 
             "batch_per_epoch": batch_per_epoch,
             "batch_per_generator": batch_per_generator,
+            "gen_step": gen_step,
             "num_loop_discriminator": 5,
             "clip_value": 1,
-            "n_classes": config_file.n_label,
+            "n_classes": cfg.n_label,
 
             "phase": _phase,
             "model_real_dir": model_real_dir,
@@ -232,11 +232,11 @@ def experiment_stance(_phase):
     print('[saving] training meta data ...')
 
     if _phase == 'cls_on_real':
-        torch.save(meta_data_train, config_file.train_real_meta_path % (config_file.corpus_name, hparam['file_frac']))
+        torch.save(meta_data_train, cfg.train_real_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
     elif _phase == 'gan':
-        torch.save(meta_data_train, config_file.train_gan_meta_path % (config_file.corpus_name, hparam['file_frac']))
+        torch.save(meta_data_train, cfg.train_gan_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
     elif _phase == 'cls_on_fake':
-        torch.save(meta_data_train, config_file.train_fake_meta_path % (config_file.corpus_name, hparam['file_frac']))
+        torch.save(meta_data_train, cfg.train_fake_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
     else:
         raise ValueError('unknown training phase name %s.' % _phase)
     print('[saved]')
@@ -246,14 +246,13 @@ def experiment_stance(_phase):
     #######
     if _phase == 'cls_on_real' or _phase == 'cls_on_fake':
         meta_data_test = trainer_.test()
-        pprint(meta_data_test['accuracy'])
+        print('accuracy:', meta_data_test['accuracy'])
+        print('micro:', meta_data_test['micro'])
+        print('macro:', meta_data_test['macro'])
         print('[saving] test meta data ...')
-        torch.save(meta_data_test, config_file.test_meta_path % (config_file.corpus_name, hparam['file_frac']))
+        torch.save(meta_data_test, cfg.test_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
         print('[saved]')
 
 
 if __name__ == '__main__':
-    phase = 'cls_on_real'
-    # phase = 'gan'
-    # phase = 'cls_on_fake'
-    experiment_stance(phase)
+    experiment_stance()

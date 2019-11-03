@@ -55,6 +55,7 @@ def visualize_features(real_meta_path, gan_meta_path, test_meta_path,
     t_data, t_labels = test_meta_data['r_data']
 
     gan_meta_data = torch.load(gan_meta_path % (corpus_name, file_frac))
+    print('total epochs:', len(gan_meta_data['g_data_epochs'].keys()))
     for epoch in gan_meta_data['g_data_epochs'].keys():
         gen_features, gen_labels = gan_meta_data['g_data_epochs'][epoch]
 
@@ -90,9 +91,9 @@ if __name__ == '__main__':
                        ConfigFile.train_gan_meta_path,
                        ConfigFile.test_meta_path,
                        ConfigFile.corpus_name,
-                       ConfigFile.hparam['file_frac'])
+                       ConfigFile.HP.file_ratio)
     # visualize_features(ConfigFile.train_real_meta_path,
     #                    ConfigFile.train_fake_meta_path,
     #                    ConfigFile.test_meta_path,
     #                    ConfigFile.corpus_name,
-    #                    ConfigFile.hparam['file_frac'])
+    #                    ConfigFile.HP.file_ratio)
