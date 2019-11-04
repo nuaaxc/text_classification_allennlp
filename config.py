@@ -97,8 +97,8 @@ class StanceConfig(DirConfig):
 
     class HP:
         # phase = 'cls_on_real'
-        # phase = 'gan'
-        phase = 'cls_on_fake'
+        phase = 'gan'
+        # phase = 'cls_on_fake'
 
         training_size = {
             '5': 129,
@@ -171,7 +171,8 @@ class StanceConfig(DirConfig):
     train_gan_meta_path = os.path.join(result_dir, 'train_gan_meta_%s_%sp.th')
     train_fake_meta_path = os.path.join(result_dir, 'train_fake_meta_%s_%sp.th')
     test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
-    img_gen_feature_path = os.path.join(result_dir, 'img', 'gen_feature_%s.png')
+
+    img_gen_feature_path = 'gen_feature_%s.png'
 
 
 class TRECConfig(DirConfig):
