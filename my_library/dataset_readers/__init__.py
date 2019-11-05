@@ -1,7 +1,6 @@
-from my_library.dataset_readers.yahoo import YahooDatasetReader
-from my_library.dataset_readers.utils import SamplingReader
-from my_library.dataset_readers.stance import StanceDatasetReader
-from my_library.dataset_readers.stance import StanceFeatureReader
-from my_library.dataset_readers.TREC import TRECDatasetReader
-from my_library.dataset_readers.TREC import TRECFeatureReader
+from my_library.dataset_readers.norm_yahoo import YahooDatasetReader
+from my_library.dataset_readers.noise import SamplingReader
+from my_library.dataset_readers.dataset import TextDatasetReader
+from my_library.dataset_readers.feature import FeatureReader
+
 

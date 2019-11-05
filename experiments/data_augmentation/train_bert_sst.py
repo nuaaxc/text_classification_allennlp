@@ -6,11 +6,11 @@ from pprint import pprint
 import torch
 
 from allennlp.common.params import Params
-from allennlp.training.trainer import Trainer, TrainerBase
+from allennlp.training.trainer import TrainerBase
 
 import my_library
 
-from config import StanceConfig, DirConfig
+from config import SSTConfig, DirConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 logging.getLogger().setLevel(logging.INFO)
@@ -22,32 +22,32 @@ random.seed(seed)
 np.random.seed(seed)
 
 
-def experiment_stance():
-    cfg = StanceConfig
-    _phase = cfg.HP.phase
+def experiment():
+    cfg = SSTConfig
+    _phase = cfg.hp.phase
     model_real_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_real_str,
-                                            'lr', str(cfg.HP.lr),
-                                            'bs', str(cfg.HP.batch_size),
-                                            'h', str(cfg.HP.d_hidden),
-                                            'dp', str(cfg.HP.dropout),
-                                            'r', str(cfg.HP.file_ratio)
+                                            'lr', str(cfg.hp.lr),
+                                            'bs', str(cfg.hp.batch_size),
+                                            'h', str(cfg.hp.d_hidden),
+                                            'dp', str(cfg.hp.dropout),
+                                            'r', str(cfg.hp.file_ratio)
                                             ]))
     model_gan_dir = os.path.join(cfg.model_dir,
                                  '_'.join(['ph', cfg.phase_gan_str,
-                                           'lr', str(cfg.HP.lr),
-                                           'bs', str(cfg.HP.batch_size),
-                                           'h', str(cfg.HP.d_hidden),
-                                           'dp', str(cfg.HP.dropout),
-                                           'r', str(cfg.HP.file_ratio)
+                                           'lr', str(cfg.hp.lr),
+                                           'bs', str(cfg.hp.batch_size),
+                                           'h', str(cfg.hp.d_hidden),
+                                           'dp', str(cfg.hp.dropout),
+                                           'r', str(cfg.hp.file_ratio)
                                            ]))
     model_fake_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_fake_str,
-                                            'lr', str(cfg.HP.lr),
-                                            'bs', str(cfg.HP.batch_size),
-                                            'h', str(cfg.HP.d_hidden),
-                                            'dp', str(cfg.HP.dropout),
-                                            'r', str(cfg.HP.file_ratio)
+                                            'lr', str(cfg.hp.lr),
+                                            'bs', str(cfg.hp.batch_size),
+                                            'h', str(cfg.hp.d_hidden),
+                                            'dp', str(cfg.hp.dropout),
+                                            'r', str(cfg.hp.file_ratio)
                                             ]))
     if _phase == cfg.phase_real_str:
         model_dir = model_real_dir
@@ -62,22 +62,22 @@ def experiment_stance():
         os.makedirs(model_dir)
 
     n_classes = cfg.n_label
-    batch_size = cfg.HP.batch_size
-    lr = cfg.HP.lr
-    d_hidden = cfg.HP.d_hidden
-    dropout = cfg.HP.dropout
-    cuda_device = cfg.HP.cuda_device
-    patience = cfg.HP.patience
-    conservative_rate = cfg.HP.conservative_rate
-    batch_per_epoch = cfg.HP.batch_per_epoch
-    batch_per_generator = cfg.HP.batch_per_generator
-    gen_step = cfg.HP.gen_step
-    n_epoch_gan = cfg.HP.n_epoch_gan
+    batch_size = cfg.hp.batch_size
+    lr = cfg.hp.lr
+    d_hidden = cfg.hp.d_hidden
+    dropout = cfg.hp.dropout
+    cuda_device = cfg.hp.cuda_device
+    patience = cfg.hp.patience
+    conservative_rate = cfg.hp.conservative_rate
+    batch_per_epoch = cfg.hp.batch_per_epoch
+    batch_per_generator = cfg.hp.batch_per_generator
+    gen_step = cfg.hp.gen_step
+    n_epoch_gan = cfg.hp.n_epoch_gan
 
     params_ = Params(
         {
             "config_file": cfg,
-            "training_file": cfg.train_ratio_path % cfg.HP.file_ratio,
+            "training_file": cfg.train_ratio_path % cfg.hp.file_ratio,
             "dev_file": cfg.dev_path,
             "test_file": cfg.test_path,
             "trainer": {
@@ -109,7 +109,7 @@ def experiment_stance():
                 "type": "feature",
                 "meta_path": cfg.train_real_meta_path,
                 "corpus_name": cfg.corpus_name,
-                "file_frac": cfg.HP.file_ratio
+                "file_frac": cfg.hp.file_ratio
             },
             # Iterators
             "training_iterator": {
@@ -233,11 +233,11 @@ def experiment_stance():
     print('[saving] training meta data ...')
 
     if _phase == 'cls_on_real':
-        torch.save(meta_data_train, cfg.train_real_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
+        torch.save(meta_data_train, cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
     elif _phase == 'gan':
-        torch.save(meta_data_train, cfg.train_gan_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
+        torch.save(meta_data_train, cfg.train_gan_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
     elif _phase == 'cls_on_fake':
-        torch.save(meta_data_train, cfg.train_fake_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
+        torch.save(meta_data_train, cfg.train_fake_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
     else:
         raise ValueError('unknown training phase name %s.' % _phase)
     print('[saved]')
@@ -251,9 +251,9 @@ def experiment_stance():
         print('micro:', meta_data_test['micro'])
         print('macro:', meta_data_test['macro'])
         print('[saving] test meta data ...')
-        torch.save(meta_data_test, cfg.test_meta_path % (cfg.corpus_name, cfg.HP.file_ratio))
+        torch.save(meta_data_test, cfg.test_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
         print('[saved]')
 
 
 if __name__ == '__main__':
-    experiment_stance()
+    experiment()

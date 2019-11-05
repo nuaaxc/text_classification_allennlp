@@ -5,6 +5,7 @@ import os
 import datetime
 import numpy as np
 import random
+import scipy.stats
 
 import sklearn
 import torch
@@ -27,6 +28,7 @@ from allennlp.training import util as training_util
 
 from my_library.optimisation import GanOptimizer
 from my_library.models.data_augmentation import Gan
+from config import DirConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -668,13 +670,12 @@ class GanBertTrainer(TrainerBase):
 
         # Vocabulary
         vocab = Vocabulary.from_instances(train_dataset,
-                                          # min_count={'tokens': 2},
-                                          # only_include_pretrained_words=True,
-                                          max_vocab_size=config_file.max_vocab_size,
-                                          )
+                                          max_vocab_size=config_file.max_vocab_size)
         # logging.info('Vocab size: %s' % vocab.get_vocab_size())
         # vocab.print_statistics()
         # print(vocab.get_token_to_index_vocabulary('labels'))
+        # vocab = Vocabulary.from_files(DirConfig.BERT_VOC)
+        # vocab.print_statistics()
 
         # Iterator
         data_iterator = DataIterator.from_params(params.pop("training_iterator"))

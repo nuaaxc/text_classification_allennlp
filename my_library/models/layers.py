@@ -10,7 +10,7 @@ def bert_embeddings(pretrained_model: str,
     bert = PretrainedBertEmbedder(
         requires_grad=training,
         pretrained_model=pretrained_model,
-        top_layer_only=top_layer_only
+        top_layer_only=top_layer_only,
     )
     word_embeddings = BasicTextFieldEmbedder(
         token_embedders={'tokens': bert},

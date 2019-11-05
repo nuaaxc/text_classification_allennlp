@@ -22,8 +22,8 @@ from allennlp.training.learning_rate_schedulers import NoamLR
 from my_library.models import BertSentencePooling
 from my_library.models import BaseLSTM
 from my_library.predictors import Predictor
-from my_library.dataset_readers.yahoo import YahooDatasetReader
-from my_library.dataset_readers.stance import StanceDatasetReader
+from my_library.dataset_readers.norm_yahoo import YahooDatasetReader
+from my_library.dataset_readers.norm_stance import StanceDatasetReader
 from config import YahooConfig, StanceConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

@@ -2,29 +2,36 @@ import os
 import random
 from collections import defaultdict
 
-from config import StanceConfig, YahooConfig, TRECConfig
-from my_library.dataset_readers.clearn_text import clean_tweet_text, clean_normal_text
+from config import (StanceConfig, YahooConfig,
+                    TRECConfig, SSTConfig,
+                    AGConfig, YelpFullConfig,
+                    AffectConfig)
+from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
 
 def train_dev_split(train_raw_path,
                     train_path,
                     dev_path,
-                    test_raw_path,
-                    test_path,
-                    encoding,
-                    sep,
-                    label_index,
-                    text_index,
-                    skip_header,
-                    clean_text,
+                    test_raw_path=None,
+                    test_path=None,
+                    encoding='utf-8',
+                    sep='\t',
+                    label_index=-1,
+                    text_index=-1,
+                    skip_header=None,
+                    clean_text=None,
                     split_ratio=0.9):
     label_example = defaultdict(list)
     with open(train_raw_path, encoding=encoding) as f:
         if skip_header:
             next(f)
         for line in f:
-            label = line.strip().split(sep)[label_index]
-            text = line.strip().split(sep)[text_index]
+            line = line.strip().split(sep)
+            try:
+                label = line[label_index]
+                text = line[text_index]
+            except IndexError:
+                continue
             label_example[label].append(text)
 
     label_train_sample = defaultdict()
@@ -80,28 +87,29 @@ def train_dev_split(train_raw_path,
                     f.write(label + '\t' + sample)
                     f.write('\n')
 
-    print('[saving] test set ...')
-    with open(test_raw_path, 'r', encoding='utf-8') as f_test_raw, \
-            open(test_path, 'w', encoding='utf-8') as f_test:
-        if skip_header:
-            next(f_test_raw)
-        for line in f_test_raw:
-            label = line.strip().split(sep)[label_index]
-            text = line.strip().split(sep)[text_index]
-            text = clean_text(text)
-            # assert len(text) > 0
-            if len(text) > 0:
-                f_test.write(label + '\t' + text)
-                f_test.write('\n')
-    print('[saved]')
+    if test_raw_path is not None and test_path is not None:
+        print('[saving] test set ...')
+        with open(test_raw_path, 'r', encoding='utf-8') as f_test_raw, \
+                open(test_path, 'w', encoding='utf-8') as f_test:
+            if skip_header:
+                next(f_test_raw)
+            for line in f_test_raw:
+                label = line.strip().split(sep)[label_index]
+                text = line.strip().split(sep)[text_index]
+                text = clean_text(text)
+                # assert len(text) > 0
+                if len(text) > 0:
+                    f_test.write(label + '\t' + text)
+                    f_test.write('\n')
+        print('[saved]')
 
 
 def train_ratio(train_path,
                 train_ratio_path,
-                encoding,
-                skip_header,
-                sample_ratio,
-                seed):
+                encoding='utf-8',
+                skip_header=False,
+                sample_ratio=100,
+                seed=2020):
     random.seed(seed)
     ###########
     # Load training data
@@ -155,6 +163,64 @@ def train_ratio(train_path,
     print('[saved] %s (%.4f) samples.' % (n_sample, n_sample / n_training_set))
 
 
+def dataset_affect(sample_ratio, seed):
+    train_ratio(train_path=AffectConfig.train_path,
+                train_ratio_path=AffectConfig.train_ratio_path % str(sample_ratio),
+                encoding='utf-8',
+                skip_header=False,
+                sample_ratio=sample_ratio,
+                seed=seed)
+
+
+def dataset_yelpfull(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=YelpFullConfig.train_norm_path,
+                        train_path=YelpFullConfig.train_path,
+                        dev_path=YelpFullConfig.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1,
+                        skip_header=False,
+                        clean_text=clean_dummy_text)
+    elif mode == 'sampling':
+        train_ratio(train_path=YelpFullConfig.train_path,
+                    train_ratio_path=YelpFullConfig.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
+def dataset_ag(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=AGConfig.train_norm_path,
+                        train_path=AGConfig.train_path,
+                        dev_path=AGConfig.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1,
+                        skip_header=False,
+                        clean_text=clean_dummy_text)
+    elif mode == 'sampling':
+        train_ratio(train_path=AGConfig.train_path,
+                    train_ratio_path=AGConfig.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
+def dataset_sst(sample_ratio, seed):
+    train_ratio(train_path=SSTConfig.train_path,
+                train_ratio_path=SSTConfig.train_ratio_path % str(sample_ratio),
+                encoding='utf-8',
+                skip_header=False,
+                sample_ratio=sample_ratio,
+                seed=seed)
+
+
 def dataset_stance(sample_ratio, mode, seed):
     if mode == 'split':
         train_dev_split(train_raw_path=StanceConfig.train_raw_path_all_target,
@@ -170,7 +236,7 @@ def dataset_stance(sample_ratio, mode, seed):
                         clean_text=clean_tweet_text)
     elif mode == 'sampling':
         train_ratio(train_path=StanceConfig.train_path,
-                    train_ratio_path=StanceConfig.train_ratio_path % int(sample_ratio * 100),
+                    train_ratio_path=StanceConfig.train_ratio_path % str(sample_ratio),
                     encoding='utf-8',
                     skip_header=False,
                     sample_ratio=sample_ratio,
@@ -181,8 +247,8 @@ def dataset_stance(sample_ratio, mode, seed):
 
 def dataset_TREC(sample_ratio):
     train_dev_split(train_raw_path=TRECConfig.train_norm_path,
-                    train_ratio_path=TRECConfig.train_ratio_path % int(sample_ratio * 100),
-                    dev_ratio_path=TRECConfig.dev_ratio_path % int(sample_ratio * 100),
+                    train_ratio_path=TRECConfig.train_ratio_path % str(sample_ratio),
+                    dev_ratio_path=TRECConfig.dev_ratio_path % str(sample_ratio),
                     test_raw_path=TRECConfig.test_norm_path,
                     test_path=TRECConfig.test_path % '100',
                     encoding='windows-1251',
@@ -196,4 +262,16 @@ def dataset_TREC(sample_ratio):
 
 if __name__ == '__main__':
     # dataset_TREC(sample_ratio=0.05)
-    dataset_stance(sample_ratio=0.2, mode='sampling', seed=2028)
+
+    # dataset_stance(sample_ratio=0.5, mode='sampling', seed=2028)
+
+    # dataset_sst(sample_ratio=0.05, seed=2020)
+
+    # dataset_ag(sample_ratio=None, mode='split', seed=2020)
+    # dataset_ag(sample_ratio=0.005, mode='sampling', seed=2020)
+
+    # dataset_yelpfull(sample_ratio=None, mode='split', seed=2020)
+    # dataset_yelpfull(sample_ratio=0.5, mode='sampling', seed=2020)
+
+    dataset_affect(sample_ratio=0.8, seed=2020)
+    pass

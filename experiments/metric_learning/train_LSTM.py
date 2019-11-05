@@ -16,7 +16,7 @@ from allennlp.training.trainer import Trainer
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
 
 from my_library.models import BaseLSTM
-from my_library.dataset_readers.yahoo import YahooDatasetReader
+from my_library.dataset_readers.norm_yahoo import YahooDatasetReader
 from config import YahooConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

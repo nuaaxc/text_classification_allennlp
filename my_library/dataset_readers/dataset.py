@@ -1,27 +1,21 @@
-from typing import Iterator, List, Dict
-import logging
-import torch
+from typing import Iterator, Dict
 
 from allennlp.data import Instance
 from allennlp.data.fields import TextField, LabelField, ArrayField
 
 from allennlp.data.dataset_readers import DatasetReader
-
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
-from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
+from allennlp.data.tokenizers import Tokenizer, WordTokenizer
 from allennlp.data.tokenizers.word_filter import StopwordFilter
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-
-@DatasetReader.register("trec_dataset")
-class TRECDatasetReader(DatasetReader):
+@DatasetReader.register("text_dataset")
+class TextDatasetReader(DatasetReader):
     def __init__(self,
                  lazy: bool = False,
                  tokenizer: WordTokenizer = None,
                  token_indexers: Dict[str, TokenIndexer] = None) -> None:
-        super().__init__(lazy)
+        super().__init__(lazy=lazy)
         self._tokenizer = tokenizer or WordTokenizer(word_filter=StopwordFilter())
         self._token_indexers = token_indexers or {"tokens": SingleIdTokenIndexer(lowercase_tokens=True)}
 
@@ -38,28 +32,3 @@ class TRECDatasetReader(DatasetReader):
         if label is not None:
             fields['label'] = LabelField(label)
         return Instance(fields)
-
-
-@DatasetReader.register("trec_feature")
-class TRECFeatureReader(DatasetReader):
-    def __init__(self,
-                 meta_path: str,
-                 corpus_name: str,
-                 file_frac: int) -> None:
-        super().__init__(lazy=True)
-        self.meta_path = meta_path
-        self.corpus_name = corpus_name
-        self.file_frac = file_frac
-
-    def _read(self, _: str) -> Iterator[Instance]:
-        features = torch.load(self.meta_path % (self.corpus_name, self.file_frac))['training_features']
-        for f in features:
-            yield self.text_to_instance(f)
-
-    def text_to_instance(self, f) -> Instance:  # type: ignore
-        return Instance({"feature": ArrayField(f['feature']),
-                         "label": ArrayField(f['label'])})
-
-
-if __name__ == '__main__':
-    pass

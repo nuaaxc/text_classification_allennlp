@@ -3,7 +3,11 @@ import spacy
 spacy_en = spacy.load('en_core_web_sm', disable=['parser', 'tagger', 'ner'])
 
 
-def clean_tweet_text(tweet):
+def clean_dummy_text(string):
+    return string
+
+
+def clean_tweet_text(tweet, remove_stop):
     processed_tweet = []
     tweet = tweet.lower()  # lower case
     tweet = re.sub(r'((www\.[\S]+)|(https?://[\S]+))', ' URL ', tweet)  # URLs
@@ -17,7 +21,11 @@ def clean_tweet_text(tweet):
 
     for word in tweet.split():
         word = preprocess_word(word)
-        if is_valid_word(word) and word not in stopwords:
+        if remove_stop:
+            _stopwords = stopwords
+        else:
+            _stopwords = set()
+        if is_valid_word(word) and word not in _stopwords:
             processed_tweet.append(word)
 
     tweet = ' '.join(processed_tweet)
