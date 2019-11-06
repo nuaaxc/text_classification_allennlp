@@ -52,10 +52,10 @@ if __name__ == '__main__':
     #                      OffensiveConfig.train_norm_path,
     #                      clean_tweet_text,
     #                      skip_header=True)
-    normalize_test_file(OffensiveConfig.test_raw_path,
-                        OffensiveConfig.test_path,
-                        clean_tweet_text,
-                        skip_header=True)
+    # normalize_test_file(OffensiveConfig.test_raw_path,
+    #                     OffensiveConfig.test_path,
+    #                     clean_tweet_text,
+    #                     skip_header=True)
     pass
 
 

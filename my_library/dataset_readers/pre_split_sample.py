@@ -5,7 +5,8 @@ from collections import defaultdict
 from config import (StanceConfig, YahooConfig,
                     TRECConfig, SSTConfig,
                     AGConfig, YelpFullConfig,
-                    AffectConfig, OffensiveConfig)
+                    AffectConfig, OffensiveConfig,
+                    NGConfig, R8Config)
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
 
@@ -163,6 +164,42 @@ def train_ratio(train_path,
     print('[saved] %s (%.4f) samples.' % (n_sample, n_sample / n_training_set))
 
 
+def dataset_r8(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=R8Config.train_norm_path,
+                        train_path=R8Config.train_path,
+                        dev_path=R8Config.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
+    elif mode == 'sampling':
+        train_ratio(train_path=R8Config.train_path,
+                    train_ratio_path=R8Config.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
+def dataset_newsgroups(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=NGConfig.train_norm_path,
+                        train_path=NGConfig.train_path,
+                        dev_path=NGConfig.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
+    elif mode == 'sampling':
+        train_ratio(train_path=NGConfig.train_path,
+                    train_ratio_path=NGConfig.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
 def dataset_affect(sample_ratio, seed):
     train_ratio(train_path=AffectConfig.train_path,
                 train_ratio_path=AffectConfig.train_ratio_path % str(sample_ratio),
@@ -294,5 +331,11 @@ if __name__ == '__main__':
     # dataset_affect(sample_ratio=0.8, seed=2020)
 
     # dataset_offensive(sample_ratio=None, mode='split', seed=2020)
-    # dataset_offensive(sample_ratio=0.8, mode='sampling', seed=2020)
+    # dataset_offensive(sample_ratio=0.5, mode='sampling', seed=2020)
+
+    # dataset_newsgroups(sample_ratio=None, mode='split', seed=2020)
+    # dataset_newsgroups(sample_ratio=0.5, mode='sampling', seed=2020)
+
+    # dataset_r8(sample_ratio=None, mode='split', seed=2020)
+    dataset_r8(sample_ratio=0.5, mode='sampling', seed=2028)
     pass
