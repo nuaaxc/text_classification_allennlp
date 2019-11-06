@@ -5,7 +5,7 @@ from collections import defaultdict
 from config import (StanceConfig, YahooConfig,
                     TRECConfig, SSTConfig,
                     AGConfig, YelpFullConfig,
-                    AffectConfig)
+                    AffectConfig, OffensiveConfig)
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
 
@@ -18,8 +18,8 @@ def train_dev_split(train_raw_path,
                     sep='\t',
                     label_index=-1,
                     text_index=-1,
-                    skip_header=None,
-                    clean_text=None,
+                    skip_header=False,
+                    clean_text=clean_dummy_text,
                     split_ratio=0.9):
     label_example = defaultdict(list)
     with open(train_raw_path, encoding=encoding) as f:
@@ -172,6 +172,24 @@ def dataset_affect(sample_ratio, seed):
                 seed=seed)
 
 
+def dataset_offensive(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=OffensiveConfig.train_norm_path,
+                        train_path=OffensiveConfig.train_path,
+                        dev_path=OffensiveConfig.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
+    elif mode == 'sampling':
+        train_ratio(train_path=OffensiveConfig.train_path,
+                    train_ratio_path=OffensiveConfig.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
 def dataset_yelpfull(sample_ratio, mode, seed):
     if mode == 'split':
         train_dev_split(train_raw_path=YelpFullConfig.train_norm_path,
@@ -273,5 +291,8 @@ if __name__ == '__main__':
     # dataset_yelpfull(sample_ratio=None, mode='split', seed=2020)
     # dataset_yelpfull(sample_ratio=0.5, mode='sampling', seed=2020)
 
-    dataset_affect(sample_ratio=0.8, seed=2020)
+    # dataset_affect(sample_ratio=0.8, seed=2020)
+
+    # dataset_offensive(sample_ratio=None, mode='split', seed=2020)
+    # dataset_offensive(sample_ratio=0.8, mode='sampling', seed=2020)
     pass

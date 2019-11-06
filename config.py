@@ -179,18 +179,18 @@ class OffensiveConfig(DirConfig):
     max_seq_len = 30
 
     hp = HP()
-    hp.lr = 0.0001
+    # hp.lr = 0.0001
     hp.phase = 'cls_on_real'
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
-    hp.file_ratio = 1
-    hp.batch_size = 8
+    hp.file_ratio = 0.1
+    hp.batch_size = 16
     hp.training_size = {
-        0.1: 114,
-        0.2: 233,
-        0.4: 469,
-        0.8: 942,
-        1: 1181,
+        0.1: 1191,
+        0.2: 2383,
+        0.4: 4766,
+        0.8: 9532,
+        1: 11916,
     }
     hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
 
