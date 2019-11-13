@@ -22,9 +22,9 @@ class DirConfig(object):
         BERT_VOC = ''
         BERT_MODEL = ''
 
-    phase_real_str = 'cls_on_real'
+    phase_real_str = 'real'
     phase_gan_str = 'gan'
-    phase_fake_str = 'cls_on_fake'
+    phase_fake_str = 'fake'
 
 
 class HP:
@@ -35,7 +35,7 @@ class HP:
     n_epoch_gan = 500
     conservative_rate = 0.1
     alpha = {
-        'cls_on_real': 1,
+        'real': 1,
         'gan': 5,
     }
     batch_per_generator = 20
@@ -114,7 +114,7 @@ class YelpFullConfig(DirConfig):
     max_seq_len = 30
 
     hp = HP()
-    hp.phase = 'cls_on_real'
+    hp.phase = DirConfig.phase_real_str
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
     hp.file_ratio = 0.01
@@ -179,7 +179,7 @@ class R8Config(DirConfig):
     max_seq_len = 30
 
     hp = HP()
-    hp.phase = 'cls_on_real'
+    hp.phase = DirConfig.phase_real_str
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
     hp.file_ratio = 0.5
@@ -238,7 +238,7 @@ class NGConfig(DirConfig):
     max_seq_len = 30
 
     hp = HP()
-    hp.phase = 'cls_on_real'
+    hp.phase = DirConfig.phase_real_str
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
     hp.file_ratio = 0.1
@@ -318,7 +318,7 @@ class OffensiveConfig(DirConfig):
 
     hp = HP()
     # hp.lr = 0.0001
-    hp.phase = 'cls_on_real'
+    hp.phase = DirConfig.phase_real_str
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
     hp.file_ratio = 0.05
@@ -379,7 +379,7 @@ class AffectConfig(DirConfig):
 
     hp = HP()
     hp.lr = 0.0001
-    hp.phase = 'cls_on_real'
+    hp.phase = DirConfig.phase_real_str
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
     hp.file_ratio = 1
@@ -440,7 +440,7 @@ class AGConfig(DirConfig):
     max_seq_len = 30
 
     hp = HP()
-    hp.phase = 'cls_on_real'
+    hp.phase = DirConfig.phase_real_str
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
     hp.file_ratio = 0.1
@@ -509,19 +509,20 @@ class SSTConfig(DirConfig):
     max_seq_len = 30
 
     hp = HP()
-    hp.phase = 'cls_on_real'
+    hp.phase = DirConfig.phase_real_str
     # hp.phase = 'gan'
     # hp.phase = 'cls_on_fake'
-    hp.file_ratio = 100
-    hp.batch_size = 16
+    hp.file_ratio = 1
+    hp.batch_size = 32
+    hp.lr = 1e-5
     hp.training_size = {
-        '5': 345,
-        '10': 692,
-        '20': 1384,
-        '50': 3460,
-        '100': 6920,
+        0.05: 345,
+        0.1: 692,
+        0.2: 1384,
+        0.5: 3460,
+        1: 6920,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[str(hp.file_ratio)] / hp.batch_size) + 1)
+    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -535,10 +536,7 @@ class SSTConfig(DirConfig):
         root = ''
         root_local = ''
 
-    labels = [
-        'positive',
-        'negative'
-    ]
+    labels = ['positive', 'negative']
 
     n_label = len(labels)
 
@@ -547,11 +545,10 @@ class SSTConfig(DirConfig):
     model_dir = os.path.join(root_local, 'models')
     result_dir = os.path.join(root_local, 'results')
 
-    vocab_path = os.path.join(cache_dir, 'vocab')
     model_path = os.path.join(model_dir, 'model_%s.th')
 
     train_raw_path = os.path.join(data_dir, 'train_tree.txt')
-    train_path = os.path.join(data_dir, 'train_100p.txt')
+    train_path = os.path.join(data_dir, 'train_1p.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
 
     dev_raw_path = os.path.join(data_dir, 'dev_tree.txt')
@@ -570,38 +567,25 @@ class SSTConfig(DirConfig):
 
 class StanceConfig(DirConfig):
     corpus_name = 'Stance'
-    max_vocab_size = 10000
+    max_vocab_size = 100000
     max_seq_len = 30
-
-    class HP:
-        # phase = 'cls_on_real'
-        phase = 'gan'
-        # phase = 'cls_on_fake'
-
-        training_size = {
-            '5': 129,
-            '10': 260,
-            '20': 523,
-            '40': 1047,
-            '80': 2096,
-            '100': 2621,
-        }
-        file_ratio = 40
-        lr = 0.00001
-        patience = 15
-        gen_step = 64 + 1
-
-        n_epoch_gan = 500
-        conservative_rate = 0.1
-        batch_size = 16
-        alpha = 1
-        if phase == DirConfig.phase_gan_str:
-            alpha = 5
-        batch_per_epoch = alpha * (int(training_size[str(file_ratio)] / batch_size) + 1)
-        batch_per_generator = 20
-        d_hidden = 768
-        dropout = 0.1
-        cuda_device = 0
+    hp = HP()
+    hp.phase = DirConfig.phase_real_str
+    # hp.phase = 'gan'
+    # hp.phase = 'fake'
+    hp.file_ratio = 0.5
+    hp.batch_size = 16
+    hp.lr = 1e-5
+    hp.max_pieces = 128
+    hp.patience = 5
+    hp.training_size = {
+        0.05: 129,
+        0.1: 260,
+        0.2: 523,
+        0.5: 1309,
+        1: 2621,
+    }
+    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -618,9 +602,9 @@ class StanceConfig(DirConfig):
     target = ['a', 'cc', 'fm', 'hc', 'la']
 
     labels = [
-        'FAVOR',
-        'AGAINST',
-        'NONE'
+        '__label__FAVOR',
+        '__label__AGAINST',
+        '__label__NONE'
     ]
 
     n_label = len(labels)
@@ -630,12 +614,12 @@ class StanceConfig(DirConfig):
     model_dir = os.path.join(root_local, 'models')
     result_dir = os.path.join(root_local, 'results')
 
-    vocab_path = os.path.join(cache_dir, 'vocab')
     model_path = os.path.join(model_dir, 'model_%s.th')
 
     train_raw_path = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-%s.txt')
     train_raw_path_all_target = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-all.txt')
-    train_path = os.path.join(data_dir, 'train_100p.txt')
+    train_norm_path = os.path.join(data_dir, 'train_norm.txt')
+    train_path = os.path.join(data_dir, 'train_1p.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
 
     dev_path = os.path.join(data_dir, 'dev.txt')

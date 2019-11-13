@@ -1,5 +1,5 @@
 from typing import Iterable
-from allennlp.data.iterators import DataIterator
+
 from tqdm import tqdm
 import numpy as np
 import torch
@@ -7,6 +7,8 @@ from scipy.special import expit  # the sigmoid function
 
 from allennlp.models.model import Model
 from allennlp.data import Instance
+from allennlp.data.iterators import DataIterator
+from allennlp.data.dataset_readers import DatasetReader
 import allennlp.nn.util as nn_util
 
 
@@ -35,3 +37,4 @@ class Predictor:
                 batch = nn_util.move_to_device(batch, self.cuda_device)
                 preds.append(self._extract_data(batch))
         return np.concatenate(preds, axis=0)
+

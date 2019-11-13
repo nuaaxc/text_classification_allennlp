@@ -278,22 +278,16 @@ def dataset_sst(sample_ratio, seed):
 
 def dataset_stance(sample_ratio, mode, seed):
     if mode == 'split':
-        train_dev_split(train_raw_path=StanceConfig.train_raw_path_all_target,
+        train_dev_split(train_raw_path=StanceConfig.train_norm_path,
                         train_path=StanceConfig.train_path,
                         dev_path=StanceConfig.dev_path,
-                        test_raw_path=StanceConfig.test_raw_path_all_target,
-                        test_path=StanceConfig.test_path,
-                        encoding='utf-8',
-                        sep='\t',
-                        label_index=3,
-                        text_index=2,
-                        skip_header=True,
-                        clean_text=clean_tweet_text)
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
     elif mode == 'sampling':
         train_ratio(train_path=StanceConfig.train_path,
                     train_ratio_path=StanceConfig.train_ratio_path % str(sample_ratio),
-                    encoding='utf-8',
-                    skip_header=False,
                     sample_ratio=sample_ratio,
                     seed=seed)
     else:
@@ -318,7 +312,8 @@ def dataset_TREC(sample_ratio):
 if __name__ == '__main__':
     # dataset_TREC(sample_ratio=0.05)
 
-    # dataset_stance(sample_ratio=0.5, mode='sampling', seed=2028)
+    # dataset_stance(sample_ratio=None, mode='split', seed=2020)
+    # dataset_stance(sample_ratio=0.2, mode='sampling', seed=2020)
 
     # dataset_sst(sample_ratio=0.05, seed=2020)
 
@@ -337,5 +332,5 @@ if __name__ == '__main__':
     # dataset_newsgroups(sample_ratio=0.5, mode='sampling', seed=2020)
 
     # dataset_r8(sample_ratio=None, mode='split', seed=2020)
-    dataset_r8(sample_ratio=0.5, mode='sampling', seed=2028)
+    # dataset_r8(sample_ratio=0.5, mode='sampling', seed=2028)
     pass

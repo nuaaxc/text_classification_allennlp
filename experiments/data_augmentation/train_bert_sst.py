@@ -86,7 +86,7 @@ def experiment():
 
             # Readers
             "dataset_reader": {
-                "lazy": True,
+                "lazy": False,
                 "type": "text_dataset",
                 "tokenizer": {
                     "word_splitter": "bert-basic"
@@ -95,7 +95,7 @@ def experiment():
                     "tokens": {
                         "type": "bert-pretrained",
                         "pretrained_model": DirConfig.BERT_VOC,
-                        "max_pieces": 128,
+                        # "max_pieces": max_pieces,
                     }
                 }
             },
@@ -115,7 +115,7 @@ def experiment():
             "training_iterator": {
                 "type": "bucket",
                 "batch_size": batch_size,
-                "instances_per_epoch": batch_per_epoch * batch_size,
+                "skip_smaller_batches": True,
                 "sorting_keys": [('text', 'num_tokens')],
                 "track_epoch": False
             },
@@ -132,7 +132,6 @@ def experiment():
                 "type": "bert_encoder",
                 "bert_path": DirConfig.BERT_MODEL,
                 "dropout": dropout,
-                # "trainable": False
                 "trainable": True
             },
             "generator": {
@@ -178,8 +177,8 @@ def experiment():
                 "type": "classifier-base",
                 "feed_forward": {
                     "input_dim": d_hidden,
-                    "num_layers": 3,
-                    "hidden_dims": [d_hidden, d_hidden, n_classes],
+                    "num_layers": 2,
+                    "hidden_dims": [d_hidden, n_classes],
                     "activations": "relu",
                     "dropout": dropout
                 },

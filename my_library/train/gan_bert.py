@@ -227,7 +227,7 @@ class GanBertTrainer(TrainerBase):
             batch = next(data_iterator)
             batch = nn_util.move_to_device(batch, self.cuda_device)
 
-            features = self.model.feature_extractor(batch['text'])
+            features = self.model.feature_extractor(batch['tokens'])
 
             r_data.append(features.data.cpu().numpy())
             r_label.extend(batch['label'].data.cpu().numpy())
@@ -387,14 +387,14 @@ class GanBertTrainer(TrainerBase):
             metrics.update({'g_label': g_label})
             logger.info('[d_loss] %s, [g_loss] %s, [mean] %s' % (loss_d, loss_g, 0.5 * (loss_d + loss_g)))
 
-        elif self.phase == 'cls_on_real':  # train the classifier on real data
+        elif self.phase == 'real':  # train the classifier on real data
             loss_cls_on_real, r_data, r_label = self._train_epoch_on_real()
             metrics.update(self.model.get_metrics(reset=True))
             metrics.update(loss_cls_on_real)
             metrics.update({'r_data': r_data})
             metrics.update({'r_label': r_label})
 
-        elif self.phase == 'cls_on_fake':  # train the classifier on fake data
+        elif self.phase == 'fake':  # train the classifier on fake data
             loss_cls_on_fake, g_data, g_label = self._train_epoch_on_fake()
             metrics.update(loss_cls_on_fake)
             metrics.update({'g_data': g_data})
@@ -424,7 +424,7 @@ class GanBertTrainer(TrainerBase):
 
                 for batch in self.data_iterator(self.test_dataset, num_epochs=1, shuffle=False):
                     batch = nn_util.move_to_device(batch, self.cuda_device)
-                    features = self.model.feature_extractor(batch['text'])
+                    features = self.model.feature_extractor(batch['tokens'])
 
                     r_data.append(features.data.cpu().numpy())
 
@@ -454,10 +454,10 @@ class GanBertTrainer(TrainerBase):
                 self.model.load_state_dict(best_model_state)
                 logger.info('[Loaded]')
 
-        if self.phase == 'cls_on_real':
+        if self.phase == 'real':
             self.n_epochs = self.n_epoch_real
 
-        if self.phase == 'cls_on_fake':
+        if self.phase == 'fake':
             self.n_epochs = self.n_epoch_fake
             logger.info('[Load gan model] ...')
             best_model_state = torch.load(os.path.join(self.model_gan_dir, 'best.th'))
@@ -494,7 +494,7 @@ class GanBertTrainer(TrainerBase):
             # train (over one epoch)
             train_metrics = self._train_epoch(epoch)
 
-            if self.phase == 'cls_on_real':
+            if self.phase == 'real':
                 r_data_epochs[epoch] = (train_metrics['r_data'], train_metrics['r_label'])
                 cls_loss_on_real_epochs[epoch] = train_metrics['cls_loss_on_real']
 
@@ -504,7 +504,7 @@ class GanBertTrainer(TrainerBase):
                 gan_loss_epochs[epoch] = train_metrics['gan_loss']
                 g_data_epochs[epoch] = (train_metrics['g_data'], train_metrics['g_label'])
 
-            elif self.phase == 'cls_on_fake':
+            elif self.phase == 'fake':
                 g_data_epochs[epoch] = (train_metrics['g_data'], train_metrics['g_label'])
 
             else:
@@ -526,7 +526,7 @@ class GanBertTrainer(TrainerBase):
 
                     if self._val_loss_tracker.should_stop_early():
                         logger.info("Ran out of patience. Stopping training.")
-                        if self.phase == 'cls_on_real':
+                        if self.phase == 'real':
                             # =======================
                             # creating feature space
                             # =======================
@@ -537,7 +537,7 @@ class GanBertTrainer(TrainerBase):
                             # get training features
                             for batch in self.data_iterator(self.train_dataset, num_epochs=1, shuffle=False):
                                 batch = nn_util.move_to_device(batch, self.cuda_device)
-                                features = self.model.feature_extractor(batch['text'])
+                                features = self.model.feature_extractor(batch['tokens'])
                                 for i in range(features.size(0)):
                                     training_features.append({'feature': features[i, :].data.cpu().numpy(),
                                                               'label': batch['label'][i].data.cpu().numpy()})
@@ -546,7 +546,7 @@ class GanBertTrainer(TrainerBase):
                             v_label = []
                             for batch in self.data_iterator(self.validation_dataset, num_epochs=1, shuffle=False):
                                 batch = nn_util.move_to_device(batch, self.cuda_device)
-                                features = self.model.feature_extractor(batch['text'])
+                                features = self.model.feature_extractor(batch['tokens'])
                                 v_data.append(features.data.cpu().numpy())
                                 v_label.extend(batch['label'].data.cpu().numpy())
                             v_data_epochs = (np.vstack(v_data), v_label)
@@ -585,7 +585,7 @@ class GanBertTrainer(TrainerBase):
             #############
             # Save model
             #############
-            if 'cls' in self.phase:
+            if 'real' in self.phase or 'fake' in self.phase:
                 self._save_checkpoint(epoch, self._val_loss_tracker)
             elif 'gan' in self.phase:
                 self._save_checkpoint(epoch, self._gan_loss_tracker)
@@ -624,7 +624,7 @@ class GanBertTrainer(TrainerBase):
 
         for batch in self.data_iterator(self.validation_dataset, num_epochs=1, shuffle=False):
             batch = nn_util.move_to_device(batch, self.cuda_device)
-            features = self.model.feature_extractor(batch['text'])
+            features = self.model.feature_extractor(batch['tokens'])
             cls_error = self.model.classifier(features, batch['label'])['loss']
 
             batches_this_epoch += 1

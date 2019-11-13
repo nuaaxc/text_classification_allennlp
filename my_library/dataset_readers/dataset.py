@@ -28,7 +28,7 @@ class TextDatasetReader(DatasetReader):
     def text_to_instance(self, label: str, text: str) -> Instance:  # type: ignore
         tokenized_text = self._tokenizer.tokenize(text)
         text_field = TextField(tokenized_text, self._token_indexers)
-        fields = {'text': text_field}
+        fields = {'tokens': text_field}
         if label is not None:
             fields['label'] = LabelField(label)
         return Instance(fields)

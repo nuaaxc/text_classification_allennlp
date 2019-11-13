@@ -1,20 +1,20 @@
 from typing import Dict, Iterable, Any, Tuple, Union
 import logging
-import math
 import time
 import os
 import datetime
-import random
 import numpy as np
-from itertools import chain
+import random
+import scipy.stats
 
+import sklearn
 import torch
+import torch.nn.functional as F
 
 from allennlp.common.tqdm import Tqdm
 from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
-from allennlp.common.util import (dump_metrics, gpu_memory_mb, peak_memory_mb,
-                                  lazy_groups_of)
+from allennlp.common.util import dump_metrics
 from allennlp.data import Instance
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.dataset_readers import DatasetReader
@@ -24,61 +24,71 @@ from allennlp.nn import util as nn_util
 from allennlp.training.trainer_base import TrainerBase
 from allennlp.training.metric_tracker import MetricTracker
 from allennlp.training.checkpointer import Checkpointer
-from allennlp.training.optimizers import Optimizer
 from allennlp.training import util as training_util
 
 from my_library.optimisation import GanOptimizer
 from my_library.models.data_augmentation import Gan
+from config import DirConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def compute_gradient_penalty(D, real_samples, fake_samples, labels, cuda_device):
+def aug_normal(f, cuda_device):
+    return f + 0.1 * torch.randn_like(f).cuda(cuda_device)
+
+
+# def aug_uniform(f, cuda_device):
+#     return f + 0.001 * torch.rand_like(f).cuda(cuda_device)
+
+
+def compute_gradient_penalty(D, h_real, h_fake, label, cuda_device):
     """Calculates the gradient penalty loss for WGAN GP"""
-    # Random weight term for interpolation between real and fake samples
-    alpha = torch.rand(real_samples.size(0), 1, dtype=torch.float32).cuda(cuda_device)
-    # Get random interpolation between real and fake samples
-    interpolates = (alpha * real_samples + (1 - alpha) * fake_samples).requires_grad_(True)
-    fake = torch.ones((real_samples.size(0), 1), requires_grad=False).cuda(cuda_device)
-    d_interpolates = D(interpolates, labels)["output"]
+
+    alpha = torch.rand(h_real.size(0), 1).cuda(cuda_device)
+    differences = h_fake - h_real
+    interpolates = h_real + (alpha * differences)
+    interpolates = interpolates.cuda(cuda_device).requires_grad_()
+    d_interpolates = D(interpolates, label)["output"]
+
     # Get gradient w.r.t. interpolates
     gradients = torch.autograd.grad(
         outputs=d_interpolates,
         inputs=interpolates,
-        grad_outputs=fake,
+        grad_outputs=torch.ones_like(d_interpolates),
         create_graph=True,
         retain_graph=True,
         only_inputs=True,
     )[0]
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    gradients_norm = torch.sqrt(torch.sum(gradients ** 2, dim=1) + 1e-12)
+    gradient_penalty = ((gradients_norm - 1) ** 2).mean()
     return gradient_penalty
 
 
-@TrainerBase.register("gan-base")
+@TrainerBase.register("gan")
 class GanTrainer(TrainerBase):
     def __init__(self,
                  model: Gan,
                  optimizer: torch.optim.Optimizer,
-                 train_dataset: Iterable[Instance],
+
                  noise_dataset: Iterable[Instance] = None,
-                 data_iterator: DataIterator = None,
+                 feature_dataset: Iterable[Instance] = None,
+
                  noise_iterator: DataIterator = None,
-                 validation_dataset: Iterable[Instance] = None,
-                 test_dataset: Iterable[Instance] = None,
+                 feature_iterator: DataIterator = None,
                  validation_metric: str = "-loss",
                  serialization_dir: str = None,
-                 num_epochs: int = 20,
+                 n_epoch_gan: int = 0,
                  batch_size: int = 16,
                  cuda_device: int = 0,
                  patience: int = 5,
+                 conservative_rate: float = 1.0,
                  num_serialized_models_to_keep: int = 1,
                  keep_serialized_model_every_num_seconds: int = None,
-                 num_loop_discriminator: int = 10,
-                 num_loop_generator: int = 10,
-                 num_loop_classifier_on_real: int = 10,
-                 num_loop_classifier_on_fake: int = 10,
+                 num_loop_discriminator: int = 5,
+                 batch_per_epoch: int = 10,
+                 batch_per_generator: int = 10,
+                 gen_step: int = 10,
                  clip_value: float = 1,
-                 no_gen: bool = False,
                  ) -> None:
         super().__init__(serialization_dir, cuda_device)
 
@@ -86,291 +96,195 @@ class GanTrainer(TrainerBase):
 
         self.optimizer = optimizer
 
-        self.train_dataset = train_dataset
         self.noise_dataset = noise_dataset
+        self.feature_dataset = feature_dataset
 
-        self.data_iterator = data_iterator
         self.noise_iterator = noise_iterator
+        self.feature_iterator = feature_iterator
 
-        self._validation_dataset = validation_dataset
-        self._test_dataset = test_dataset
+        self.n_epoch_gan = n_epoch_gan
 
-        self._num_epochs = num_epochs
         self._batch_size = batch_size
 
-        self._val_loss_tracker = MetricTracker(patience, validation_metric)
-        self._g_loss_tracker = MetricTracker(3, validation_metric)
-        self._validation_metric = validation_metric[1:]
+        self._gan_loss_tracker = MetricTracker(patience, validation_metric)
 
         self._checkpointer = Checkpointer(serialization_dir,
                                           keep_serialized_model_every_num_seconds,
                                           num_serialized_models_to_keep)
-        self._batch_num_total = 0
+
+        self.conservative_rate = conservative_rate
         self.num_loop_discriminator = num_loop_discriminator
-        self.num_loop_generator = num_loop_generator
-        self.num_loop_classifier_on_real = num_loop_classifier_on_real
-        self.num_loop_classifier_on_fake = num_loop_classifier_on_fake
+        self.batch_per_epoch = batch_per_epoch
+        self.batch_per_generator = batch_per_generator
+        self.gen_step = gen_step
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
-        self.no_gen = no_gen
+        self.n_epochs = None
 
-    def _train_epoch_discriminator(self):
-        logger.info('### Training discriminator ###')
+        self.aug_features = []
 
-        d_loss = 0.0
-        batches_this_loop = 0
-
+    def _train_discriminator(self, f, noise, label):
         self.optimizer.stage = 'discriminator'
+        self.optimizer.zero_grad()
 
-        data_iterator = self.data_iterator(self.train_dataset)
-        noise_iterator = self.noise_iterator(self.noise_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_discriminator), total=self.num_loop_discriminator)
+        for p in self.model.discriminator.parameters():  # reset requires_grad
+            p.requires_grad = True  # they are set to False below in netG update
 
-        for _ in loop:
-            batches_this_loop += 1
+        # Real example
+        real_validity = self.model.discriminator(f, label)["output"]
 
-            self.optimizer.zero_grad()
+        # Fake example
+        fake_data = self.model.generator(f, noise, label=label)["output"].detach()
+        fake_validity = self.model.discriminator(fake_data, label)["output"]
 
-            batch = next(data_iterator)
-            noise = next(noise_iterator)
+        # Gradient penalty
+        gradient_penalty = compute_gradient_penalty(self.model.discriminator,
+                                                    h_real=f.data,
+                                                    h_fake=fake_data.data,
+                                                    label=label,
+                                                    cuda_device=self.cuda_device)
 
-            batch = nn_util.move_to_device(batch, self._cuda_devices[0])
-            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
+        d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10. * gradient_penalty
 
-            # Real example
-            features = self.model.feature_extractor(batch['text'])
-            real_validity = self.model.discriminator(features, batch['label'])["output"]
+        d_error.backward()
+        self.optimizer.step()
 
-            # Fake example
-            fake_data = self.model.generator(noise["array"], noise["label"])["output"]
-            fake_validity = self.model.discriminator(fake_data, noise["label"])["output"]
+        # Clip weights of discriminator
+        # for p in self.model.discriminator.parameters():
+        #     p.data.clamp_(-self.clip_value, self.clip_value)
 
-            # Gradient penalty
-            gradient_penalty = compute_gradient_penalty(self.model.discriminator,
-                                                        features.data,
-                                                        fake_data.data,
-                                                        torch.randint_like(noise["label"], 0, 3),
-                                                        self.cuda_device)
+        return d_error.item()
 
-            d_error = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
-
-            d_error.backward()
-            self.optimizer.step()
-
-            # Clip weights of discriminator
-            for p in self.model.discriminator.parameters():
-                p.data.clamp_(-self.clip_value, self.clip_value)
-
-            d_loss += d_error.item()
-
-            # Update the description with the latest metrics
-            loop.set_description(
-                training_util.description_from_metrics({'d_loss': d_loss / batches_this_loop}),
-                refresh=False
-            )
-        return {'d_loss': d_loss / batches_this_loop}
-
-    def _train_epoch_generator(self):
-        logger.info('### Training generator ###')
-
-        g_loss = 0.0
-        batches_this_loop = 0
-
+    def _train_generator(self, f, noise, label):
         self.optimizer.stage = 'generator'
+        self.optimizer.zero_grad()
+
+        for p in self.model.discriminator.parameters():
+            p.requires_grad = False
+
+        generated = self.model.generator(feature=f,
+                                         noise=noise,
+                                         label=label,
+                                         discriminator=self.model.discriminator)
+
+        cls_results = self.model.classifier(generated['output'], label)
+        cls_prediction_syn = cls_results['output']
+        cls_prediction_real = self.model.classifier(f, label)['output']
+        kl = F.kl_div(cls_prediction_syn.log(), cls_prediction_real, reduction='batchmean')
+
+        fake_error = generated["loss"] + 10 * cls_results['loss'] + 10 * kl
+        fake_error.backward()
+
+        self.optimizer.step()
+
+        return fake_error.item()
+
+    def sample_feature(self, feature_iterator, conservative_rate):
+        """
+        Sample from a real feature or a generated feature
+        """
+        choice: float = random.random()
+        if len(self.aug_features) == 0 or choice > conservative_rate:
+            feature = next(feature_iterator)
+        else:
+            feature = random.sample(self.aug_features, 1)[0]
+        feature = nn_util.move_to_device(feature, self.cuda_device)
+        return feature
+
+    def _train_gan(self) -> Any:
+        loss_d = []
+        loss_g = []
+        feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
         noise_iterator = self.noise_iterator(self.noise_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_generator))
+        # Freeze the classifier
+        for p in self.model.classifier.parameters():
+            p.requires_grad = False
 
-        g_data = []
-
-        for _ in loop:
-            batches_this_loop += 1
-
-            self.optimizer.zero_grad()
-
-            noise = next(noise_iterator)
-            noise = nn_util.move_to_device(noise, self.cuda_device)
-
-            generated = self.model.generator(noise["array"],
-                                             noise["label"],
-                                             self.model.discriminator)
-
-            g_data.append(generated["output"].data.cpu().numpy())
-
-            fake_error = generated["loss"]
-            fake_error.backward()
-            self.optimizer.step()
-
-            g_loss += fake_error.item()
-
-            # Update the description with the latest metrics
-            loop.set_description(
-                training_util.description_from_metrics({'g_loss': g_loss / batches_this_loop}),
-                refresh=False
-            )
-        return {'g_loss': g_loss / batches_this_loop}, np.vstack(g_data)
-
-    def _train_epoch_classifier_on_real(self):
-        logger.info('### Training classifier on real data ###')
-
-        cls_loss = 0.
-        batches_this_loop = 0
-
-        self.optimizer.stage = 'classifier'
-
-        data_iterator = self.data_iterator(self.train_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_classifier_on_real))
-
-        r_data = []
-        r_label = []
-
-        for _ in loop:
-            batches_this_loop += 1
-
-            self.optimizer.zero_grad()
-
-            batch = next(data_iterator)
-            batch = nn_util.move_to_device(batch, self._cuda_devices[0])
-
-            features = self.model.feature_extractor(batch['text'])
-
-            r_data.append(features.data.cpu().numpy())
-            r_label.extend(batch['label'].data.cpu().numpy())
-
-            cls_error = self.model.classifier(features, batch['label'])['loss']
-            cls_error.backward()
-
-            cls_loss += cls_error.mean().item()
-
-            self.optimizer.step()
-
-            # Update the description with the latest metrics
-            loop.set_description(
-                training_util.description_from_metrics({'cls_loss_on_real': cls_loss / batches_this_loop}),
-                refresh=False
-            )
-        return {'cls_loss_on_real': cls_loss / batches_this_loop}, np.vstack(r_data), r_label
-
-    def _train_epoch_classifier_on_fake(self):
-        logger.info('### Training classifier on fake data ###')
-
-        cls_loss = 0.
-        batches_this_loop = 0
-
-        self.optimizer.stage = 'classifier'
-
-        # freeze feature_extractor
+        # Freeze the feature extractor
         for p in self.model.feature_extractor.parameters():
             p.requires_grad = False
 
-        noise_iterator = self.noise_iterator(self.noise_dataset)
-        loop = Tqdm.tqdm(range(self.num_loop_classifier_on_fake))
+        # train on this epoch
+        for i in range(self.batch_per_epoch):
+            f = self.sample_feature(feature_iterator, self.conservative_rate)
+            noise = next(noise_iterator)['array']
+            noise = nn_util.move_to_device(noise, self.cuda_device)
+            # ##############
+            # discriminator
+            # ##############
+            _loss_d = self._train_discriminator(f['feature'], noise, f['label'])
+            loss_d.append(_loss_d)
 
+            if (i + 1) % self.num_loop_discriminator == 0:
+                f = self.sample_feature(feature_iterator, self.conservative_rate)
+                noise = next(noise_iterator)['array']
+                noise = nn_util.move_to_device(noise, self.cuda_device)
+                # ##########
+                # generator
+                # ##########
+                _loss_g = self._train_generator(f['feature'], noise, f['label'])
+                loss_g.append(_loss_g)
+
+        # #################
+        # generate samples
+        # #################
         g_data = []
+        g_label = []
+        print(len(self.aug_features))
 
-        for _ in loop:
-            batches_this_loop += 1
-
-            self.optimizer.zero_grad()
-
-            noise = next(noise_iterator)
-            noise = nn_util.move_to_device(noise, self._cuda_devices[0])
-
-            generated = self.model.generator(noise["array"],
-                                             noise["label"])['output']
+        for i in range(self.batch_per_generator):
+            f = self.sample_feature(feature_iterator, self.conservative_rate)
+            noise = next(noise_iterator)['array']
+            noise = nn_util.move_to_device(noise, self.cuda_device)
+            generated = self.model.generator(f['feature'], noise, f['label'])['output']
+            self.aug_features.append({'feature': generated.data.cpu(),
+                                      'label': f['label'].data.cpu()})
 
             g_data.append(generated.data.cpu().numpy())
+            g_label.extend(f['label'].data.cpu().numpy())
+        return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data), g_label
 
-            cls_error = self.model.classifier(generated, noise['label'])['loss']
-            cls_error.backward()
+    def feature_generation(self, K):
+        aug_features = []
+        feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
+        noise_iterator = self.noise_iterator(self.noise_dataset)
+        for k in range(K):
+            for n in range(self.batch_per_epoch):
+                if k == 0:
+                    f = next(feature_iterator)
+                    aug_features.append({'feature': f['feature'], 'label': f['label']})
+                else:
+                    noise = next(noise_iterator)['array']
+                    noise = nn_util.move_to_device(noise, self.cuda_device)
 
-            cls_loss += cls_error.mean().item()
+                    f = random.sample(aug_features, 1)[0]
+                    f = nn_util.move_to_device(f, self.cuda_device)
 
-            self.optimizer.step()
+                    generated = self.model.generator(f['feature'], noise, f['label'])['output']
+                    aug_features.append({'feature': generated.data.cpu(),
+                                         'label': f['label'].data.cpu()})
+        return aug_features
 
-            # Update the description with the latest metrics
-            loop.set_description(
-                training_util.description_from_metrics({'cls_loss_on_fake': cls_loss / batches_this_loop}),
-                refresh=False
-            )
-        if batches_this_loop:
-            return {'cls_loss_on_fake': cls_loss / batches_this_loop}, np.vstack(g_data)
-        else:
-            return {'cls_loss_on_fake': 0.}, np.vstack(g_data)
+    def _train_epoch(self, epoch: int) -> Any:
 
-    def _train_gan(self) -> Any:
-        loss_d = self._train_epoch_discriminator()
-        loss_g, g_data = self._train_epoch_generator()
-        return loss_d, loss_g, g_data
-
-    def _train_epoch(self, epoch: int, train_phase: str) -> Any:
-
-        logger.info("Epoch %d/%d", epoch, self._num_epochs - 1)
-        logger.info("Training phase: %s ..." % train_phase)
+        logger.info("Epoch %d/%d", epoch, self.n_epochs)
+        logger.info("Phase: %s ..." % self.phase)
         self.model.train()
 
         metrics = {}
 
-        if train_phase == 'gan':  # train the GAN
-            loss_d, loss_g, g_data = self._train_gan()
-            metrics.update(loss_d)
-            metrics.update(loss_g)
-            metrics.update({'g_data': g_data})
-
-        elif train_phase == 'cls_on_real':  # train the classifier on real data
-            loss_cls_on_real, r_data, r_label = self._train_epoch_classifier_on_real()
-            metrics.update(self.model.get_metrics(reset=True))
-            metrics.update(loss_cls_on_real)
-            metrics.update({'r_data': r_data})
-            metrics.update({'r_label': r_label})
-
-        elif train_phase == 'cls_on_fake':  # train the classifier on fake data
-            loss_cls_on_fake, g_data = self._train_epoch_classifier_on_fake()
-            metrics.update(loss_cls_on_fake)
-            metrics.update({'g_data': g_data})
-
-        else:
-            raise ValueError('unknown training phase name %s.' % train_phase)
+        loss_d, loss_g, g_data, g_label = self._train_gan()
+        metrics.update({'d_loss': loss_d})
+        metrics.update({'g_loss': loss_g})
+        metrics.update({'gan_loss': 0.5 * (loss_d + loss_g)})
+        metrics.update({'g_data': g_data})
+        metrics.update({'g_label': g_label})
+        logger.info('[d_loss] %s, [g_loss] %s, [mean] %s' % (loss_d, loss_g, 0.5 * (loss_d + loss_g)))
 
         return metrics
 
-    def test(self) -> Any:
-        logger.info("### Testing ###")
-        with torch.no_grad():
-            self.model.eval()
-
-            test_iterator = self.data_iterator(self._test_dataset, num_epochs=1, shuffle=False)
-            # val_iterator = lazy_groups_of(val_iterator, 1)
-            num_test_batches = math.ceil(self.data_iterator.get_num_batches(self._test_dataset))
-            test_generator_tqdm = Tqdm.tqdm(test_iterator, total=num_test_batches)
-
-            batches_this_epoch = 0
-            test_loss = 0.
-            test_metrics = {}
-
-            r_data = []
-
-            for batch in test_generator_tqdm:
-                # batch = batch[0]
-                batch = nn_util.move_to_device(batch, self._cuda_devices[0])
-                features = self.model.feature_extractor(batch['text'])
-
-                r_data.append(features.data.cpu().numpy())
-
-                cls_error = self.model.classifier(features, batch['label'])['loss']
-
-                batches_this_epoch += 1
-                test_loss += cls_error.mean().item()
-
-                # Update the description with the latest metrics
-                test_metrics = training_util.get_metrics(self.model, test_loss, batches_this_epoch)
-                description = training_util.description_from_metrics(test_metrics)
-                test_generator_tqdm.set_description(description, refresh=False)
-
-            return test_metrics, np.vstack(r_data)
-
     def train(self) -> Any:
-
         logger.info("Beginning training.")
 
         val_metrics: Dict[str, float] = {}
@@ -378,199 +292,82 @@ class GanTrainer(TrainerBase):
         epochs_trained = 0
         training_start_time = time.time()
 
-        metrics['best_epoch'] = self._val_loss_tracker.best_epoch
-        for key, value in self._val_loss_tracker.best_epoch_metrics.items():
-            metrics["best_validation_" + key] = value
+        self.n_epochs = self.n_epoch_gan
+        logger.info('[Load real model] ...')
+        best_model_state = torch.load(os.path.join(self.model_real_dir, 'best.th'))
+        if best_model_state:
+            self.model.load_state_dict(best_model_state)
+            logger.info('[Loaded]')
 
-        r_data_epochs = {}
-        g_data_epochs = {}
+        g_data_epochs = {}  # training data (generated)
         d_loss_epochs = {}
         g_loss_epochs = {}
-        cls_loss_on_real_epochs = {}
+        gan_loss_epochs = {}
 
-        train_phase = 'cls_on_real'
+        training_features = []
 
-        # train (over epochs)
-        for epoch in range(self._num_epochs):
-
-            if epoch > 450:
-                train_phase = 'cls_on_fake'
+        # train over epochs
+        for epoch in range(self.n_epochs):
 
             epoch_start_time = time.time()
 
             # train (over one epoch)
-            train_metrics = self._train_epoch(epoch, train_phase)
+            train_metrics = self._train_epoch(epoch)
 
-            if train_phase == 'cls_on_real':
-                r_data_epochs[epoch] = (train_metrics['r_data'], train_metrics['r_label'])
-                cls_loss_on_real_epochs[epoch] = train_metrics['cls_loss_on_real']
+            d_loss_epochs[epoch] = train_metrics['d_loss']
+            g_loss_epochs[epoch] = train_metrics['g_loss']
+            gan_loss_epochs[epoch] = train_metrics['gan_loss']
+            g_data_epochs[epoch] = (train_metrics['g_data'], train_metrics['g_label'])
 
-            elif train_phase == 'gan':
-                d_loss_epochs[epoch] = train_metrics['d_loss']
-                g_loss_epochs[epoch] = train_metrics['g_loss']
-                g_data_epochs[epoch] = train_metrics['g_data']
+            if self.phase == 'gan':
+                self._gan_loss_tracker.add_metric(gan_loss_epochs[epoch])
 
-            elif train_phase == 'cls_on_fake':
-                g_data_epochs[epoch] = train_metrics['g_data']
-
-            else:
-                raise ValueError('unknown training phase %s.' % train_phase)
-
-            # Validation
-            if self._validation_dataset is not None and 'cls' in train_phase:
-                with torch.no_grad():
-                    # We have a validation set, so compute all the metrics on it,
-                    # and reset the metrics as validation ends.
-                    val_loss, num_batches = self._validation_loss()
-                    val_metrics = training_util.get_metrics(self.model, val_loss, num_batches, reset=True)
-
-                    # Check validation metric for early stopping
-                    this_epoch_val_metric = val_metrics[self._validation_metric]
-                    self._val_loss_tracker.add_metric(this_epoch_val_metric)
-
-                    # stop cls_on_real phase
-                    if self._val_loss_tracker.should_stop_early() and 'real' in train_phase:
-                        logger.info("Ran out of patience. Stopping training the classifier on real data.")
-                        if self.no_gen:
-                            break
-                        # load best model
-                        best_model_state = self._checkpointer.best_model_state()
-                        if best_model_state:
-                            self.model.load_state_dict(best_model_state)
-                        # move to the next phase (gan)
-                        train_phase = 'gan'
-                        # reset metric tracker
-                        self._val_loss_tracker.clear()
-                        continue
-                    # stop cls_on_real phase
-                    elif self._val_loss_tracker.should_stop_early() and 'fake' in train_phase:
-                        logger.info("Ran out of patience. Stopping training the classifier on fake data.")
-                        # load best model
-                        best_model_state = self._checkpointer.best_model_state()
-                        if best_model_state:
-                            self.model.load_state_dict(best_model_state)
-                        break
-
-            # Create overall metrics dict
+            #########################
+            # Create overall metrics
+            #########################
             training_elapsed_time = time.time() - training_start_time
             metrics["training_duration"] = str(datetime.timedelta(seconds=training_elapsed_time))
             metrics["training_epochs"] = epochs_trained
             metrics["epoch"] = epoch
 
             for key, value in train_metrics.items():
-                if key != 'r_data' and key != 'g_data':
+                if key != 'r_data' and key != 'g_data' and key != 'r_label' and key != 'g_label':
                     metrics["training_" + key] = value
-
-            if 'cls' in train_phase:
-
-                for key, value in val_metrics.items():
-                    metrics["validation_" + key] = value
-
-                if self._val_loss_tracker.is_best_so_far():
-                    metrics['best_epoch'] = epoch
-                    for key, value in val_metrics.items():
-                        metrics["best_validation_" + key] = value
-
-                    self._val_loss_tracker.best_epoch_metrics = val_metrics
 
             if self._serialization_dir:
                 dump_metrics(os.path.join(self._serialization_dir, f'metrics_epoch_{epoch}.json'), metrics)
 
-            # if self._learning_rate_scheduler:
-            #     self._learning_rate_scheduler.step(this_epoch_val_metric, epoch)
-            # if self._momentum_scheduler:
-            #     self._momentum_scheduler.step(this_epoch_val_metric, epoch)
-
-            self._save_checkpoint(epoch)
+            #############
+            # Save model
+            #############
+            self._save_checkpoint(epoch, self._gan_loss_tracker)
 
             epoch_elapsed_time = time.time() - epoch_start_time
             logger.info("Epoch duration: %s", datetime.timedelta(seconds=epoch_elapsed_time))
 
-            if epoch < self._num_epochs - 1:
+            if epoch < self.n_epochs - 1:
                 training_elapsed_time = time.time() - training_start_time
-                estimated_time_remaining = training_elapsed_time * (self._num_epochs / float(epoch + 1) - 1)
+                estimated_time_remaining = training_elapsed_time * (self.n_epochs / float(epoch + 1) - 1)
                 formatted_time = str(datetime.timedelta(seconds=int(estimated_time_remaining)))
                 logger.info("Estimated training time remaining: %s", formatted_time)
 
             epochs_trained += 1
 
-        # Load the best model state before returning
-        # best_model_state = self._checkpointer.best_model_state()
-        # if best_model_state:
-        #     self.model.load_state_dict(best_model_state)
-
         meta_data = {
-            'r_data_epochs': r_data_epochs,
+            'metrics': metrics,
             'g_data_epochs': g_data_epochs,
             'd_loss_epochs': d_loss_epochs,
             'g_loss_epochs': g_loss_epochs,
-            'cls_loss_on_real_epochs': cls_loss_on_real_epochs
+            'training_features': training_features
         }
-        return metrics, meta_data
+        return meta_data
 
-    def _validation_loss(self) -> Tuple[float, int]:
-        """
-        Computes the validation loss. Returns it and the number of batches.
-        """
-        logger.info("### Validating ###")
-        self.model.eval()
-
-        val_iterator = self.data_iterator(self._validation_dataset, num_epochs=1, shuffle=False)
-        # val_iterator = lazy_groups_of(val_iterator, 1)
-        num_validation_batches = math.ceil(self.data_iterator.get_num_batches(self._validation_dataset))
-        val_generator_tqdm = Tqdm.tqdm(val_iterator, total=num_validation_batches)
-
-        batches_this_epoch = 0
-        val_loss = 0.
-
-        for batch in val_generator_tqdm:
-            # batch = batch[0]
-            batch = nn_util.move_to_device(batch, self._cuda_devices[0])
-            features = self.model.feature_extractor(batch['text'])
-            cls_error = self.model.classifier(features, batch['label'])['loss']
-
-            batches_this_epoch += 1
-            val_loss += cls_error.mean().item()
-
-            # Update the description with the latest metrics
-            val_metrics = training_util.get_metrics(self.model, val_loss, batches_this_epoch)
-            description = training_util.description_from_metrics(val_metrics)
-            val_generator_tqdm.set_description(description, refresh=False)
-
-        return val_loss, batches_this_epoch
-
-    def _save_checkpoint(self, epoch: Union[int, str]) -> None:
-        """
-        Saves a checkpoint of the model to self._serialization_dir.
-        Is a no-op if self._serialization_dir is None.
-        Parameters
-        ----------
-        epoch : Union[int, str], required.
-            The epoch of training.  If the checkpoint is saved in the middle
-            of an epoch, the parameter is a string with the epoch and timestamp.
-        """
-        # These are the training states we need to persist.
-        training_states = {
-            "metric_tracker": self._val_loss_tracker.state_dict(),
-            # "optimizer": self.optimizer.state_dict(),
-            "batch_num_total": self._batch_num_total
-        }
-
-        # If we have a learning rate or momentum scheduler, we should persist them too.
-        # if self._learning_rate_scheduler is not None:
-        #     training_states["learning_rate_scheduler"] = self._learning_rate_scheduler.state_dict()
-        # if self._momentum_scheduler is not None:
-        #     training_states["momentum_scheduler"] = self._momentum_scheduler.state_dict()
-
+    def _save_checkpoint(self, epoch: Union[int, str], _tracker) -> None:
         self._checkpointer.save_checkpoint(
             model_state=self.model.state_dict(),
             epoch=epoch,
-            training_states=training_states,
-            is_best_so_far=self._val_loss_tracker.is_best_so_far())
-
-        # Restore the original values for parameters so that training will not be affected.
-        # if self._moving_average is not None:
-        #     self._moving_average.restore()
+            training_states={},
+            is_best_so_far=_tracker.is_best_so_far())
 
     @classmethod
     def from_params(cls,  # type: ignore
@@ -581,94 +378,80 @@ class GanTrainer(TrainerBase):
                     cache_prefix: str = None
                     ) -> 'GanTrainer':
 
-        training_file = params.pop('training_file')
-        dev_file = params.pop('dev_file')
-        test_file = params.pop('test_file')
+        train_feature = params.pop('train_feature_path')
 
         config_file = params.pop('config_file')
         cuda_device = params.pop_int("cuda_device")
 
         # Data reader
-        vocab_reader = DatasetReader.from_params(params.pop('vocab_reader'))
-        train_reader = DatasetReader.from_params(params.pop('train_reader'))
-        val_reader = DatasetReader.from_params(params.pop("val_reader"))
-
-        vocab_dataset = vocab_reader.read(cached_path(training_file))
-        train_dataset = train_reader.read(cached_path(training_file))
-        validation_dataset = val_reader.read(cached_path(dev_file))
-        test_dataset = val_reader.read(cached_path(test_file))
 
         noise_reader = DatasetReader.from_params(params.pop("noise_reader"))
         noise_dataset = noise_reader.read("")
 
+        feature_reader = DatasetReader.from_params(params.pop("feature_reader"))
+        feature_dataset = feature_reader.read("")
+
         # Vocabulary
-        vocab = Vocabulary.from_instances(vocab_dataset,
-                                          # min_count={'tokens': 2},
-                                          only_include_pretrained_words=True,
-                                          max_vocab_size=config_file.max_vocab_size,
-                                          )
-        logging.info('Vocab size: %s' % vocab.get_vocab_size())
-        # vocab.print_statistics()
-        # print(vocab.get_token_to_index_vocabulary('labels'))
+        # vocab = Vocabulary.from_files(os.path.join(serialization_dir, "vocabulary"))
+        vocab = Vocabulary.from_instances(feature_dataset)
+
         # Iterator
-        data_iterator = DataIterator.from_params(params.pop("training_iterator"))
-        data_iterator.index_with(vocab)
         noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
+        noise_iterator.index_with(vocab)
+        feature_iterator = DataIterator.from_params(params.pop("feature_iterator"))
         noise_iterator.index_with(vocab)
 
         # Model
-        feature_extractor = Model.from_params(params.pop("feature_extractor"), vocab=vocab).cuda(cuda_device)
         generator = Model.from_params(params.pop("generator"), vocab=None).cuda(cuda_device)
         discriminator = Model.from_params(params.pop("discriminator"), vocab=None).cuda(cuda_device)
-        classifier = Model.from_params(params.pop("classifier")).cuda(cuda_device)
+
+        cls_model = Model.from_params(params.pop("cls_model")).cuda(cuda_device)
+        cls_model.load_state_dict(torch.load(params.pop("best_cls_model_state_path")))
 
         model = Gan(
-            feature_extractor=feature_extractor,
             generator=generator,
             discriminator=discriminator,
-            classifier=classifier
         )
 
         # Optimize
         parameters = []
         for component in [
-                model.feature_extractor,
-                model.generator,
-                model.discriminator,
-                model.classifier]:
+            model.generator,
+            model.discriminator]:
             parameters += [[n, p] for n, p in component.named_parameters() if p.requires_grad]
         optimizer = GanOptimizer.from_params(parameters, params.pop("optimizer"))
 
-        num_epochs = params.pop_int("num_epochs")
+        n_epoch_gan = params.pop_int("n_epoch_gan")
         batch_size = params.pop_int("batch_size")
         patience = params.pop_int("patience")
+        conservative_rate = params.pop_float("conservative_rate")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
-        num_loop_generator = params.pop_int("num_loop_generator")
-        num_loop_classifier_on_real = params.pop_int("num_loop_classifier_on_real")
-        num_loop_classifier_on_fake = params.pop_int("num_loop_classifier_on_fake")
+        batch_per_epoch = params.pop_int("batch_per_epoch")
+        batch_per_generator = params.pop_int("batch_per_generator")
+        gen_step = params.pop_int("gen_step")
         clip_value = params.pop_int("clip_value")
-        no_gen = params.pop_int("no_gen")
-
         params.pop("trainer")
-
         params.assert_empty(__name__)
 
         return cls(model=model,
                    optimizer=optimizer,
-                   train_dataset=train_dataset,
+
                    noise_dataset=noise_dataset,
-                   data_iterator=data_iterator,
+                   feature_dataset=feature_dataset,
+
                    noise_iterator=noise_iterator,
-                   validation_dataset=validation_dataset,
-                   test_dataset=test_dataset,
+                   feature_iterator=feature_iterator,
+
                    serialization_dir=serialization_dir,
-                   num_epochs=num_epochs,
+
+                   n_epoch_gan=n_epoch_gan,
+
                    batch_size=batch_size,
                    cuda_device=cuda_device,
                    patience=patience,
+                   conservative_rate=conservative_rate,
                    num_loop_discriminator=num_loop_discriminator,
-                   num_loop_generator=num_loop_generator,
-                   num_loop_classifier_on_real=num_loop_classifier_on_real,
-                   num_loop_classifier_on_fake=num_loop_classifier_on_fake,
-                   clip_value=clip_value,
-                   no_gen=no_gen)
+                   batch_per_epoch=batch_per_epoch,
+                   batch_per_generator=batch_per_generator,
+                   gen_step=gen_step,
+                   clip_value=clip_value)
