@@ -67,7 +67,8 @@ def compute_gradient_penalty(D, h_real, h_fake, label, cuda_device):
 @TrainerBase.register("gan")
 class GanTrainer(TrainerBase):
     def __init__(self,
-                 model: Gan,
+                 model: Model,
+                 cls_model: Model,
                  optimizer: torch.optim.Optimizer,
 
                  noise_dataset: Iterable[Instance] = None,
@@ -77,7 +78,7 @@ class GanTrainer(TrainerBase):
                  feature_iterator: DataIterator = None,
                  validation_metric: str = "-loss",
                  serialization_dir: str = None,
-                 n_epoch_gan: int = 0,
+                 n_epoch: int = 0,
                  batch_size: int = 16,
                  cuda_device: int = 0,
                  patience: int = 5,
@@ -93,6 +94,7 @@ class GanTrainer(TrainerBase):
         super().__init__(serialization_dir, cuda_device)
 
         self.model = model
+        self.cls_model = cls_model
 
         self.optimizer = optimizer
 
@@ -102,7 +104,7 @@ class GanTrainer(TrainerBase):
         self.noise_iterator = noise_iterator
         self.feature_iterator = feature_iterator
 
-        self.n_epoch_gan = n_epoch_gan
+        self.n_epoch = n_epoch
 
         self._batch_size = batch_size
 
@@ -292,7 +294,7 @@ class GanTrainer(TrainerBase):
         epochs_trained = 0
         training_start_time = time.time()
 
-        self.n_epochs = self.n_epoch_gan
+        self.n_epochs = self.n_epoch
         logger.info('[Load real model] ...')
         best_model_state = torch.load(os.path.join(self.model_real_dir, 'best.th'))
         if best_model_state:
@@ -389,10 +391,9 @@ class GanTrainer(TrainerBase):
         noise_dataset = noise_reader.read("")
 
         feature_reader = DatasetReader.from_params(params.pop("feature_reader"))
-        feature_dataset = feature_reader.read("")
+        feature_dataset = feature_reader.read(train_feature)
 
         # Vocabulary
-        # vocab = Vocabulary.from_files(os.path.join(serialization_dir, "vocabulary"))
         vocab = Vocabulary.from_instances(feature_dataset)
 
         # Iterator
@@ -405,7 +406,7 @@ class GanTrainer(TrainerBase):
         generator = Model.from_params(params.pop("generator"), vocab=None).cuda(cuda_device)
         discriminator = Model.from_params(params.pop("discriminator"), vocab=None).cuda(cuda_device)
 
-        cls_model = Model.from_params(params.pop("cls_model")).cuda(cuda_device)
+        cls_model = Model.from_params(params.pop("cls_model"), vocab=None).cuda(cuda_device)
         cls_model.load_state_dict(torch.load(params.pop("best_cls_model_state_path")))
 
         model = Gan(
@@ -421,7 +422,7 @@ class GanTrainer(TrainerBase):
             parameters += [[n, p] for n, p in component.named_parameters() if p.requires_grad]
         optimizer = GanOptimizer.from_params(parameters, params.pop("optimizer"))
 
-        n_epoch_gan = params.pop_int("n_epoch_gan")
+        n_epoch = params.pop_int("n_epoch")
         batch_size = params.pop_int("batch_size")
         patience = params.pop_int("patience")
         conservative_rate = params.pop_float("conservative_rate")
@@ -434,6 +435,7 @@ class GanTrainer(TrainerBase):
         params.assert_empty(__name__)
 
         return cls(model=model,
+                   cls_model=cls_model,
                    optimizer=optimizer,
 
                    noise_dataset=noise_dataset,
@@ -444,7 +446,7 @@ class GanTrainer(TrainerBase):
 
                    serialization_dir=serialization_dir,
 
-                   n_epoch_gan=n_epoch_gan,
+                   n_epoch=n_epoch,
 
                    batch_size=batch_size,
                    cuda_device=cuda_device,

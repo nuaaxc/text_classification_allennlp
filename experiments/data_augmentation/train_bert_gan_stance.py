@@ -57,13 +57,13 @@ def run():
     batch_per_epoch = cfg.hp.batch_per_epoch
     batch_per_generator = cfg.hp.batch_per_generator
     gen_step = cfg.hp.gen_step
-    n_epoch_gan = cfg.hp.n_epoch_gan
+    n_epoch = cfg.hp.n_epoch_gan
     best_cls_model_state_path = os.path.join(model_real_dir, 'best.th')
 
     params_ = Params(
         {
             "config_file": cfg,
-            "train_feature_path": cfg.train_ratio_path % cfg.hp.file_ratio,
+            "train_feature_path": cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
 
             "trainer": {
                 "type": "gan"
@@ -77,9 +77,6 @@ def run():
             },
             "feature_reader": {
                 "type": "feature",
-                "meta_path": cfg.train_real_meta_path,
-                "corpus_name": cfg.corpus_name,
-                "file_frac": cfg.hp.file_ratio
             },
             # Iterators
             "noise_iterator": {
@@ -94,6 +91,7 @@ def run():
             "best_cls_model_state_path": best_cls_model_state_path,
             "cls_model": {
                 "type": "feature_classifier",
+                "num_labels": n_classes,
                 "text_field_embedder": {
                     "allow_unmatched_keys": True,
                     "embedder_to_indexer_map": {
@@ -168,7 +166,7 @@ def run():
             "cuda_device": cuda_device,
             "patience": patience,
             "conservative_rate": conservative_rate,
-            "n_epoch_gan": n_epoch_gan,
+            "n_epoch": n_epoch,
 
             "batch_per_epoch": batch_per_epoch,
             "batch_per_generator": batch_per_generator,
@@ -176,10 +174,9 @@ def run():
             "num_loop_discriminator": 5,
             "clip_value": 1,
         })
-    exit()
     trainer_ = TrainerBase.from_params(params_, model_gan_dir)
-
     meta_data_train = trainer_.train()
+    exit()
     pprint(meta_data_train['metrics'])
     # save training meta data
     print('[saving] training meta data ...')

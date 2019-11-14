@@ -7,20 +7,19 @@ from allennlp.data.fields import ArrayField
 
 @DatasetReader.register("feature")
 class FeatureReader(DatasetReader):
-    def __init__(self,
-                 meta_path: str,
-                 corpus_name: str,
-                 file_frac: int) -> None:
+    def __init__(self) -> None:
         super().__init__(lazy=True)
-        self.meta_path = meta_path
-        self.corpus_name = corpus_name
-        self.file_frac = file_frac
 
-    def _read(self, _: str) -> Iterator[Instance]:
-        features = torch.load(self.meta_path % (self.corpus_name, self.file_frac))['training_features']
-        for f in features:
-            yield self.text_to_instance(f)
+    def _read(self, path: str) -> Iterator[Instance]:
+        features = torch.load(path)
+        train_features = features['train_features']
+        train_labels = features['train_labels']
 
-    def text_to_instance(self, f) -> Instance:  # type: ignore
-        return Instance({"feature": ArrayField(f['feature']),
-                         "label": ArrayField(f['label'])})
+        for i in range(len(train_features)):
+            yield self.text_to_instance(train_features[i], train_labels[i])
+
+    def text_to_instance(self, f, l) -> Instance:  # type: ignore
+        return Instance({
+            "feature": ArrayField(f),
+            "label": ArrayField(l)
+        })
