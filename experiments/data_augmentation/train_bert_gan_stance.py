@@ -84,9 +84,12 @@ def run():
                 "batch_size": batch_size
             },
             "feature_iterator": {
-                "type": "basic",
-                "batch_size": batch_size
+                "type": "bucket",
+                "batch_size": batch_size,
+                "sorting_keys": [('feature', 'dimension_0')],
+                "skip_smaller_batches": True
             },
+            "vocab_path": os.path.join(model_real_dir, 'vocabulary'),
             # Model
             "best_cls_model_state_path": best_cls_model_state_path,
             "cls_model": {
@@ -110,7 +113,8 @@ def run():
                     "type": "bert_pooler",
                     "pretrained_model": DirConfig.BERT_MODEL,
                     "requires_grad": True
-                }
+                },
+                "feature_only": True
             },
             "generator": {
                 "type": "generator-base",

@@ -58,6 +58,7 @@ class FeatureClassifier(Model):
         label_namespace: str = "labels",
         initializer: InitializerApplicator = InitializerApplicator(),
         regularizer: Optional[RegularizerApplicator] = None,
+        feature_only: bool = False,
     ) -> None:
 
         super().__init__(vocab, regularizer)
@@ -88,10 +89,15 @@ class FeatureClassifier(Model):
         self._classification_layer = torch.nn.Linear(self._classifier_input_dim, self._num_labels)
         self._accuracy = CategoricalAccuracy()
         self._loss = torch.nn.CrossEntropyLoss()
+
+        self.feature_only = feature_only
+
         initializer(self)
 
     def forward(  # type: ignore
-        self, tokens: Dict[str, torch.LongTensor], label: torch.IntTensor = None
+        self,
+            tokens,
+            label: torch.IntTensor = None,
     ) -> Dict[str, torch.Tensor]:
 
         """
@@ -113,24 +119,31 @@ class FeatureClassifier(Model):
         loss : torch.FloatTensor, optional
             A scalar loss to be optimised.
         """
-        embedded_text = self._text_field_embedder(tokens)
-        mask = get_text_field_mask(tokens).float()
+        if not self.feature_only:
+            embedded_text = self._text_field_embedder(tokens)
+            mask = get_text_field_mask(tokens).float()
 
-        if self._seq2seq_encoder:
-            embedded_text = self._seq2seq_encoder(embedded_text, mask=mask)
+            if self._seq2seq_encoder:
+                embedded_text = self._seq2seq_encoder(embedded_text, mask=mask)
 
-        embedded_text = self._seq2vec_encoder(embedded_text, mask=mask)
+            embedded_text = self._seq2vec_encoder(embedded_text, mask=mask)
 
-        if self._dropout:
-            embedded_text = self._dropout(embedded_text)
+            if self._dropout:
+                embedded_text = self._dropout(embedded_text)
 
-        if self._feedforward is not None:
-            embedded_text = self._feedforward(embedded_text)
+            if self._feedforward is not None:
+                embedded_text = self._feedforward(embedded_text)
 
-        logits = self._classification_layer(embedded_text)
-        probs = torch.nn.functional.softmax(logits, dim=-1)
+            logits = self._classification_layer(embedded_text)
+            probs = torch.nn.functional.softmax(logits, dim=-1)
 
-        output_dict = {"logits": logits, "probs": probs, "features": embedded_text}
+            output_dict = {"logits": logits, "probs": probs, "features": embedded_text}
+
+        else:
+            logits = self._classification_layer(tokens)
+            probs = torch.nn.functional.softmax(logits, dim=-1)
+
+            output_dict = {"logits": logits, "probs": probs}
 
         if label is not None:
             loss = self._loss(logits, label.long().view(-1))

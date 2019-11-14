@@ -122,7 +122,6 @@ class GanTrainer(TrainerBase):
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
-        self.n_epochs = None
 
         self.aug_features = []
 
@@ -161,18 +160,16 @@ class GanTrainer(TrainerBase):
     def _train_generator(self, f, noise, label):
         self.optimizer.stage = 'generator'
         self.optimizer.zero_grad()
-
-        for p in self.model.discriminator.parameters():
+        for p in self.model.discriminator.parameters():     # freeze discriminator
             p.requires_grad = False
 
         generated = self.model.generator(feature=f,
                                          noise=noise,
                                          label=label,
                                          discriminator=self.model.discriminator)
-
-        cls_results = self.model.classifier(generated['output'], label)
-        cls_prediction_syn = cls_results['output']
-        cls_prediction_real = self.model.classifier(f, label)['output']
+        cls_results = self.cls_model(generated['output'], label)
+        cls_prediction_syn = cls_results['probs']
+        cls_prediction_real = self.cls_model(f, label)['probs']
         kl = F.kl_div(cls_prediction_syn.log(), cls_prediction_real, reduction='batchmean')
 
         fake_error = generated["loss"] + 10 * cls_results['loss'] + 10 * kl
@@ -199,13 +196,6 @@ class GanTrainer(TrainerBase):
         loss_g = []
         feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
         noise_iterator = self.noise_iterator(self.noise_dataset)
-        # Freeze the classifier
-        for p in self.model.classifier.parameters():
-            p.requires_grad = False
-
-        # Freeze the feature extractor
-        for p in self.model.feature_extractor.parameters():
-            p.requires_grad = False
 
         # train on this epoch
         for i in range(self.batch_per_epoch):
@@ -270,8 +260,7 @@ class GanTrainer(TrainerBase):
 
     def _train_epoch(self, epoch: int) -> Any:
 
-        logger.info("Epoch %d/%d", epoch, self.n_epochs)
-        logger.info("Phase: %s ..." % self.phase)
+        logger.info("Epoch %d/%d", epoch, self.n_epoch)
         self.model.train()
 
         metrics = {}
@@ -289,17 +278,9 @@ class GanTrainer(TrainerBase):
     def train(self) -> Any:
         logger.info("Beginning training.")
 
-        val_metrics: Dict[str, float] = {}
         metrics: Dict[str, Any] = {}
         epochs_trained = 0
         training_start_time = time.time()
-
-        self.n_epochs = self.n_epoch
-        logger.info('[Load real model] ...')
-        best_model_state = torch.load(os.path.join(self.model_real_dir, 'best.th'))
-        if best_model_state:
-            self.model.load_state_dict(best_model_state)
-            logger.info('[Loaded]')
 
         g_data_epochs = {}  # training data (generated)
         d_loss_epochs = {}
@@ -309,7 +290,7 @@ class GanTrainer(TrainerBase):
         training_features = []
 
         # train over epochs
-        for epoch in range(self.n_epochs):
+        for epoch in range(self.n_epoch):
 
             epoch_start_time = time.time()
 
@@ -321,8 +302,7 @@ class GanTrainer(TrainerBase):
             gan_loss_epochs[epoch] = train_metrics['gan_loss']
             g_data_epochs[epoch] = (train_metrics['g_data'], train_metrics['g_label'])
 
-            if self.phase == 'gan':
-                self._gan_loss_tracker.add_metric(gan_loss_epochs[epoch])
+            self._gan_loss_tracker.add_metric(gan_loss_epochs[epoch])
 
             #########################
             # Create overall metrics
@@ -333,7 +313,7 @@ class GanTrainer(TrainerBase):
             metrics["epoch"] = epoch
 
             for key, value in train_metrics.items():
-                if key != 'r_data' and key != 'g_data' and key != 'r_label' and key != 'g_label':
+                if key != 'g_data' and key != 'g_label':
                     metrics["training_" + key] = value
 
             if self._serialization_dir:
@@ -347,9 +327,9 @@ class GanTrainer(TrainerBase):
             epoch_elapsed_time = time.time() - epoch_start_time
             logger.info("Epoch duration: %s", datetime.timedelta(seconds=epoch_elapsed_time))
 
-            if epoch < self.n_epochs - 1:
+            if epoch < self.n_epoch - 1:
                 training_elapsed_time = time.time() - training_start_time
-                estimated_time_remaining = training_elapsed_time * (self.n_epochs / float(epoch + 1) - 1)
+                estimated_time_remaining = training_elapsed_time * (self.n_epoch / float(epoch + 1) - 1)
                 formatted_time = str(datetime.timedelta(seconds=int(estimated_time_remaining)))
                 logger.info("Estimated training time remaining: %s", formatted_time)
 
@@ -394,7 +374,8 @@ class GanTrainer(TrainerBase):
         feature_dataset = feature_reader.read(train_feature)
 
         # Vocabulary
-        vocab = Vocabulary.from_instances(feature_dataset)
+        vocab_path = params.pop("vocab_path")
+        vocab = Vocabulary.from_files(vocab_path)
 
         # Iterator
         noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))

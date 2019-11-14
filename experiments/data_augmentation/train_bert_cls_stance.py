@@ -94,7 +94,8 @@ def run():
                     "type": "bert_pooler",
                     "pretrained_model": DirConfig.BERT_MODEL,
                     "requires_grad": True
-                }
+                },
+                "feature_only": False
             },
             "trainer": {
                 "type": "std",
