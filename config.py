@@ -32,13 +32,9 @@ class HP:
     lr = 0.00001
     patience = 5
     gen_step = 16 + 1
-    n_epoch_gan = 500
+    n_epoch_gan = 10
     conservative_rate = 0.1
-    alpha = {
-        'real': 1,
-        'gan': 5,
-    }
-    batch_per_generator = 20
+    batch_per_generation = 20
     d_hidden = 768
     dropout = 0.1
     cuda_device = 0
@@ -129,7 +125,7 @@ class YelpFullConfig(DirConfig):
         0.5: 292491,
         1: 584986,  # 585000
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -192,7 +188,7 @@ class R8Config(DirConfig):
         0.5: 2464,
         1: 4933,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -252,7 +248,7 @@ class NGConfig(DirConfig):
         0.5: 5073,
         1: 10155,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -330,7 +326,7 @@ class OffensiveConfig(DirConfig):
         0.5: 5958,
         1: 11916,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -391,7 +387,7 @@ class AffectConfig(DirConfig):
         0.8: 942,
         1: 1181,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -455,7 +451,7 @@ class AGConfig(DirConfig):
         0.5: 54000,
         1: 108000,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -522,7 +518,7 @@ class SSTConfig(DirConfig):
         0.5: 3460,
         1: 6920,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -570,8 +566,8 @@ class StanceConfig(DirConfig):
     max_vocab_size = 100000
     max_seq_len = 30
     hp = HP()
-    hp.phase = DirConfig.phase_real_str
-    # hp.phase = 'gan'
+    # hp.phase = DirConfig.phase_real_str
+    hp.phase = DirConfig.phase_gan_str
     # hp.phase = 'fake'
     hp.file_ratio = 0.5
     hp.batch_size = 16
@@ -585,7 +581,9 @@ class StanceConfig(DirConfig):
         0.5: 1309,
         1: 2621,
     }
-    hp.batch_per_epoch = hp.alpha[hp.phase] * (int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1)
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
+    if hp.phase == DirConfig.phase_gan_str:
+        hp.batch_per_epoch = 5 * hp.batch_per_epoch
 
     if 'C:' in DirConfig.home:
         root = os.path.join(DirConfig.home, 'OneDrive/data61/project/%s/dataset/%s'

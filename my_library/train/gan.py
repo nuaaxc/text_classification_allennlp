@@ -5,14 +5,10 @@ import os
 import datetime
 import numpy as np
 import random
-import scipy.stats
 
-import sklearn
 import torch
 import torch.nn.functional as F
 
-from allennlp.common.tqdm import Tqdm
-from allennlp.common.file_utils import cached_path
 from allennlp.common.params import Params
 from allennlp.common.util import dump_metrics
 from allennlp.data import Instance
@@ -27,8 +23,6 @@ from allennlp.training.checkpointer import Checkpointer
 from allennlp.training import util as training_util
 
 from my_library.optimisation import GanOptimizer
-from my_library.models.data_augmentation import Gan
-from config import DirConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -87,7 +81,7 @@ class GanTrainer(TrainerBase):
                  keep_serialized_model_every_num_seconds: int = None,
                  num_loop_discriminator: int = 5,
                  batch_per_epoch: int = 10,
-                 batch_per_generator: int = 10,
+                 batch_per_generation: int = 10,
                  gen_step: int = 10,
                  clip_value: float = 1,
                  ) -> None:
@@ -117,8 +111,7 @@ class GanTrainer(TrainerBase):
         self.conservative_rate = conservative_rate
         self.num_loop_discriminator = num_loop_discriminator
         self.batch_per_epoch = batch_per_epoch
-        self.batch_per_generator = batch_per_generator
-        self.gen_step = gen_step
+        self.batch_per_generation = batch_per_generation
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
@@ -225,7 +218,7 @@ class GanTrainer(TrainerBase):
         g_label = []
         print(len(self.aug_features))
 
-        for i in range(self.batch_per_generator):
+        for i in range(self.batch_per_generation):
             f = self.sample_feature(feature_iterator, self.conservative_rate)
             noise = next(noise_iterator)['array']
             noise = nn_util.move_to_device(noise, self.cuda_device)
@@ -236,27 +229,6 @@ class GanTrainer(TrainerBase):
             g_data.append(generated.data.cpu().numpy())
             g_label.extend(f['label'].data.cpu().numpy())
         return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data), g_label
-
-    def feature_generation(self, K):
-        aug_features = []
-        feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
-        noise_iterator = self.noise_iterator(self.noise_dataset)
-        for k in range(K):
-            for n in range(self.batch_per_epoch):
-                if k == 0:
-                    f = next(feature_iterator)
-                    aug_features.append({'feature': f['feature'], 'label': f['label']})
-                else:
-                    noise = next(noise_iterator)['array']
-                    noise = nn_util.move_to_device(noise, self.cuda_device)
-
-                    f = random.sample(aug_features, 1)[0]
-                    f = nn_util.move_to_device(f, self.cuda_device)
-
-                    generated = self.model.generator(f['feature'], noise, f['label'])['output']
-                    aug_features.append({'feature': generated.data.cpu(),
-                                         'label': f['label'].data.cpu()})
-        return aug_features
 
     def _train_epoch(self, epoch: int) -> Any:
 
@@ -286,8 +258,6 @@ class GanTrainer(TrainerBase):
         d_loss_epochs = {}
         g_loss_epochs = {}
         gan_loss_epochs = {}
-
-        training_features = []
 
         # train over epochs
         for epoch in range(self.n_epoch):
@@ -340,7 +310,6 @@ class GanTrainer(TrainerBase):
             'g_data_epochs': g_data_epochs,
             'd_loss_epochs': d_loss_epochs,
             'g_loss_epochs': g_loss_epochs,
-            'training_features': training_features
         }
         return meta_data
 
@@ -361,12 +330,9 @@ class GanTrainer(TrainerBase):
                     ) -> 'GanTrainer':
 
         train_feature = params.pop('train_feature_path')
-
-        config_file = params.pop('config_file')
         cuda_device = params.pop_int("cuda_device")
 
         # Data reader
-
         noise_reader = DatasetReader.from_params(params.pop("noise_reader"))
         noise_dataset = noise_reader.read("")
 
@@ -384,23 +350,13 @@ class GanTrainer(TrainerBase):
         noise_iterator.index_with(vocab)
 
         # Model
-        generator = Model.from_params(params.pop("generator"), vocab=None).cuda(cuda_device)
-        discriminator = Model.from_params(params.pop("discriminator"), vocab=None).cuda(cuda_device)
-
-        cls_model = Model.from_params(params.pop("cls_model"), vocab=None).cuda(cuda_device)
+        cls_model = Model.from_params(params.pop("cls"), vocab=None).cuda(cuda_device)
         cls_model.load_state_dict(torch.load(params.pop("best_cls_model_state_path")))
 
-        model = Gan(
-            generator=generator,
-            discriminator=discriminator,
-        )
+        gan_model = Model.from_params(params.pop("gan"), vocab=None).cuda(cuda_device)
 
         # Optimize
-        parameters = []
-        for component in [
-            model.generator,
-            model.discriminator]:
-            parameters += [[n, p] for n, p in component.named_parameters() if p.requires_grad]
+        parameters = [[n, p] for n, p in gan_model.named_parameters() if p.requires_grad]
         optimizer = GanOptimizer.from_params(parameters, params.pop("optimizer"))
 
         n_epoch = params.pop_int("n_epoch")
@@ -409,13 +365,12 @@ class GanTrainer(TrainerBase):
         conservative_rate = params.pop_float("conservative_rate")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
-        batch_per_generator = params.pop_int("batch_per_generator")
-        gen_step = params.pop_int("gen_step")
+        batch_per_generation = params.pop_int("batch_per_generation")
         clip_value = params.pop_int("clip_value")
         params.pop("trainer")
         params.assert_empty(__name__)
 
-        return cls(model=model,
+        return cls(model=gan_model,
                    cls_model=cls_model,
                    optimizer=optimizer,
 
@@ -435,6 +390,5 @@ class GanTrainer(TrainerBase):
                    conservative_rate=conservative_rate,
                    num_loop_discriminator=num_loop_discriminator,
                    batch_per_epoch=batch_per_epoch,
-                   batch_per_generator=batch_per_generator,
-                   gen_step=gen_step,
+                   batch_per_generation=batch_per_generation,
                    clip_value=clip_value)

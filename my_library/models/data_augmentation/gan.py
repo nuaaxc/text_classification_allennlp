@@ -3,7 +3,7 @@ from allennlp.models import Model
 from allennlp.common.params import Params
 
 
-@Model.register("gan")
+@Model.register("gan-base")
 class Gan(Model):
     """
     Our trainer wants a single model, so we cheat by encapsulating both the

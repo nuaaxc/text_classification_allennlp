@@ -55,14 +55,12 @@ def run():
     patience = cfg.hp.patience
     conservative_rate = cfg.hp.conservative_rate
     batch_per_epoch = cfg.hp.batch_per_epoch
-    batch_per_generator = cfg.hp.batch_per_generator
-    gen_step = cfg.hp.gen_step
+    batch_per_generation = cfg.hp.batch_per_generation
     n_epoch = cfg.hp.n_epoch_gan
     best_cls_model_state_path = os.path.join(model_real_dir, 'best.th')
 
     params_ = Params(
         {
-            "config_file": cfg,
             "train_feature_path": cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
 
             "trainer": {
@@ -92,7 +90,7 @@ def run():
             "vocab_path": os.path.join(model_real_dir, 'vocabulary'),
             # Model
             "best_cls_model_state_path": best_cls_model_state_path,
-            "cls_model": {
+            "cls": {
                 "type": "feature_classifier",
                 "num_labels": n_classes,
                 "text_field_embedder": {
@@ -116,43 +114,46 @@ def run():
                 },
                 "feature_only": True
             },
-            "generator": {
-                "type": "generator-base",
-                "label_emb": {
-                    "type": "embedding",
-                    "num_embeddings": n_classes,
-                    "embedding_dim": d_hidden,
-                    "trainable": True
+            "gan": {
+                "type": "gan-base",
+                "generator": {
+                    "type": "generator-base",
+                    "label_emb": {
+                        "type": "embedding",
+                        "num_embeddings": n_classes,
+                        "embedding_dim": d_hidden,
+                        "trainable": True
+                    },
+                    "perturb": {
+                        "input_dim": 2 * d_hidden,
+                        "num_layers": 1,
+                        "hidden_dims": d_hidden,
+                        "activations": "relu",
+                        "dropout": dropout
+                    },
+                    "feed_forward": {
+                        "input_dim": 2 * d_hidden,
+                        "num_layers": 1,
+                        "hidden_dims": d_hidden,
+                        "activations": "relu",
+                        "dropout": dropout
+                    },
                 },
-                "perturb": {
-                    "input_dim": 2 * d_hidden,
-                    "num_layers": 1,
-                    "hidden_dims": d_hidden,
-                    "activations": "relu",
-                    "dropout": dropout
-                },
-                "feed_forward": {
-                    "input_dim": 2 * d_hidden,
-                    "num_layers": 1,
-                    "hidden_dims": d_hidden,
-                    "activations": "relu",
-                    "dropout": dropout
-                },
-            },
-            "discriminator": {
-                "type": "discriminator-base",
-                "label_emb": {
-                    "type": "embedding",
-                    "num_embeddings": n_classes,
-                    "embedding_dim": d_hidden,
-                    "trainable": True
-                },
-                "feed_forward": {
-                    "input_dim": 2 * d_hidden,
-                    "num_layers": 3,
-                    "hidden_dims": [d_hidden, d_hidden, 1],
-                    "activations": "relu",
-                    "dropout": dropout
+                "discriminator": {
+                    "type": "discriminator-base",
+                    "label_emb": {
+                        "type": "embedding",
+                        "num_embeddings": n_classes,
+                        "embedding_dim": d_hidden,
+                        "trainable": True
+                    },
+                    "feed_forward": {
+                        "input_dim": 2 * d_hidden,
+                        "num_layers": 3,
+                        "hidden_dims": [d_hidden, d_hidden, 1],
+                        "activations": "relu",
+                        "dropout": dropout
+                    },
                 },
             },
             "optimizer": {
@@ -173,15 +174,12 @@ def run():
             "n_epoch": n_epoch,
 
             "batch_per_epoch": batch_per_epoch,
-            "batch_per_generator": batch_per_generator,
-            "gen_step": gen_step,
+            "batch_per_generation": batch_per_generation,
             "num_loop_discriminator": 5,
             "clip_value": 1,
         })
     trainer_ = TrainerBase.from_params(params_, model_gan_dir)
     meta_data_train = trainer_.train()
-    exit()
-    pprint(meta_data_train['metrics'])
     # save training meta data
     print('[saving] training meta data ...')
     torch.save(meta_data_train, cfg.train_gan_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
