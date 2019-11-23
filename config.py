@@ -31,8 +31,8 @@ class HP:
     training_size = {}
     lr = 0.00001
     patience = 5
-    gen_step = 16 + 1
-    n_epoch_gan = 10
+    gen_step = 32 + 1
+    n_epoch_gan = 200
     conservative_rate = 0.1
     batch_per_generation = 20
     d_hidden = 768
@@ -573,7 +573,8 @@ class StanceConfig(DirConfig):
     hp.batch_size = 16
     hp.lr = 1e-5
     hp.max_pieces = 128
-    hp.patience = 5
+    hp.patience = 15
+    hp.gen_step = 16 + 1
     hp.training_size = {
         0.05: 129,
         0.1: 260,

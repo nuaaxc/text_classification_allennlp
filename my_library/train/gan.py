@@ -198,7 +198,7 @@ class GanTrainer(TrainerBase):
             # ##############
             # discriminator
             # ##############
-            _loss_d = self._train_discriminator(f['feature'], noise, f['label'])
+            _loss_d = self._train_discriminator(f['tokens'], noise, f['label'])
             loss_d.append(_loss_d)
 
             if (i + 1) % self.num_loop_discriminator == 0:
@@ -208,7 +208,7 @@ class GanTrainer(TrainerBase):
                 # ##########
                 # generator
                 # ##########
-                _loss_g = self._train_generator(f['feature'], noise, f['label'])
+                _loss_g = self._train_generator(f['tokens'], noise, f['label'])
                 loss_g.append(_loss_g)
 
         # #################
@@ -222,8 +222,8 @@ class GanTrainer(TrainerBase):
             f = self.sample_feature(feature_iterator, self.conservative_rate)
             noise = next(noise_iterator)['array']
             noise = nn_util.move_to_device(noise, self.cuda_device)
-            generated = self.model.generator(f['feature'], noise, f['label'])['output']
-            self.aug_features.append({'feature': generated.data.cpu(),
+            generated = self.model.generator(f['tokens'], noise, f['label'])['output']
+            self.aug_features.append({'tokens': generated.data.cpu(),
                                       'label': f['label'].data.cpu()})
 
             g_data.append(generated.data.cpu().numpy())
@@ -329,15 +329,15 @@ class GanTrainer(TrainerBase):
                     cache_prefix: str = None
                     ) -> 'GanTrainer':
 
-        train_feature = params.pop('train_feature_path')
+        train_feature_path = params.pop('train_feature_path')
         cuda_device = params.pop_int("cuda_device")
 
         # Data reader
         noise_reader = DatasetReader.from_params(params.pop("noise_reader"))
-        noise_dataset = noise_reader.read("")
+        noise_data = noise_reader.read("")
 
         feature_reader = DatasetReader.from_params(params.pop("feature_reader"))
-        feature_dataset = feature_reader.read(train_feature)
+        feature_data = feature_reader.read(train_feature_path)
 
         # Vocabulary
         vocab_path = params.pop("vocab_path")
@@ -347,7 +347,7 @@ class GanTrainer(TrainerBase):
         noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
         noise_iterator.index_with(vocab)
         feature_iterator = DataIterator.from_params(params.pop("feature_iterator"))
-        noise_iterator.index_with(vocab)
+        feature_iterator.index_with(vocab)
 
         # Model
         cls_model = Model.from_params(params.pop("cls"), vocab=None).cuda(cuda_device)
@@ -374,8 +374,8 @@ class GanTrainer(TrainerBase):
                    cls_model=cls_model,
                    optimizer=optimizer,
 
-                   noise_dataset=noise_dataset,
-                   feature_dataset=feature_dataset,
+                   noise_dataset=noise_data,
+                   feature_dataset=feature_data,
 
                    noise_iterator=noise_iterator,
                    feature_iterator=feature_iterator,

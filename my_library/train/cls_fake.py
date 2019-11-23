@@ -19,7 +19,9 @@ from allennlp.common.util import dump_metrics, gpu_memory_mb, peak_memory_mb, la
 from allennlp.common.util import get_frozen_and_tunable_parameter_names
 from allennlp.common.tqdm import Tqdm
 from allennlp.data.instance import Instance
+from allennlp.data.fields import ArrayField
 from allennlp.data.vocabulary import Vocabulary
+from allennlp.data.dataset_readers import DatasetReader
 from allennlp.data.iterators.data_iterator import DataIterator, TensorDict
 from allennlp.models.model import Model
 from allennlp.nn import util as nn_util
@@ -40,12 +42,15 @@ logger = logging.getLogger(__name__)
 class ClsFakeTrainer(TrainerBase):
     def __init__(
             self,
-            model: Model,
+            cls_model: Model,
+            gan_model: Model,
             optimizer: torch.optim.Optimizer,
-            iterator: DataIterator,
+            feature_iterator: DataIterator,
+            noise_iterator: DataIterator,
             train_dataset: Iterable[Instance],
-            validation_dataset: Optional[Iterable[Instance]] = None,
-            test_dataset: Optional[Iterable[Instance]] = None,
+            validation_dataset: Iterable[Instance] = None,
+            test_dataset: Iterable[Instance] = None,
+            noise_data: Iterable[Instance] = None,
             patience: Optional[int] = None,
             validation_metric: str = "-loss",
             validation_iterator: DataIterator = None,
@@ -67,6 +72,7 @@ class ClsFakeTrainer(TrainerBase):
             should_log_learning_rate: bool = False,
             log_batch_size_period: Optional[int] = None,
             moving_average: Optional[MovingAverage] = None,
+            gen_step: int = None,
     ) -> None:
         """
         A trainer for doing supervised learning. It just takes a labeled dataset
@@ -181,27 +187,20 @@ class ClsFakeTrainer(TrainerBase):
 
         # I am not calling move_to_gpu here, because if the model is
         # not already on the GPU then the optimizer is going to be wrong.
-        self.model = model
+        self.model = cls_model
+        self.gan_model = gan_model
 
-        self.iterator = iterator
+        self.feature_iterator = feature_iterator
+        self.noise_iterator = noise_iterator
+
         self._validation_iterator = validation_iterator
         self.shuffle = shuffle
         self.optimizer = optimizer
         self.train_data = train_dataset
+        self.noise_data = noise_data
+        self.aug_train_data, self.gen_data = self.feature_generation(gen_step)
         self._validation_data = validation_dataset
         self._test_data = test_dataset
-
-        if patience is None:  # no early stopping
-            if validation_dataset:
-                logger.warning(
-                    "You provided a validation dataset but patience was set to None, "
-                    "meaning that early stopping is disabled"
-                )
-        elif (not isinstance(patience, int)) or patience <= 0:
-            raise ConfigurationError(
-                '{} is an invalid value for "patience": it must be a positive integer '
-                "or None (if you want to disable early stopping)".format(patience)
-            )
 
         # For tracking is_best_so_far and should_stop_early
         self._metric_tracker = MetricTracker(patience, validation_metric)
@@ -209,6 +208,7 @@ class ClsFakeTrainer(TrainerBase):
         self._validation_metric = validation_metric[1:]
 
         self._num_epochs = num_epochs
+        self.epochs_trained = None
 
         if checkpointer is not None:
             # We can't easily check if these parameters were passed in, so check against their default values.
@@ -309,9 +309,9 @@ class ClsFakeTrainer(TrainerBase):
         num_gpus = len(self._cuda_devices)
 
         # Get tqdm for the training batches
-        raw_train_generator = self.iterator(self.train_data, num_epochs=1, shuffle=self.shuffle)
+        raw_train_generator = self.feature_iterator(self.aug_train_data, num_epochs=1, shuffle=self.shuffle)
         train_generator = lazy_groups_of(raw_train_generator, num_gpus)
-        num_training_batches = math.ceil(self.iterator.get_num_batches(self.train_data) / num_gpus)
+        num_training_batches = math.ceil(self.feature_iterator.get_num_batches(self.aug_train_data) / num_gpus)
         self._last_log = time.time()
         last_save_time = time.time()
 
@@ -463,34 +463,59 @@ class ClsFakeTrainer(TrainerBase):
         return val_loss, batches_this_epoch
 
     def feature_generation(self, K):
-        aug_features = []
-        feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
-        noise_iterator = self.noise_iterator(self.noise_dataset)
+        logger.info("[Generating synthetic features] beginning ...")
+        aug_features = []  # for training
+        gen_features = []  # for archiving
+        gen_labels = []  # for archiving
+        feature_iterator = self.feature_iterator(self.train_data, num_epochs=None, shuffle=True)
+        noise_iterator = self.noise_iterator(self.noise_data)
+        num_training_batches = math.ceil(self.feature_iterator.get_num_batches(self.train_data))
         for k in range(K):
-            for n in range(self.batch_per_epoch):
+            for n in range(num_training_batches):
                 if k == 0:
                     f = next(feature_iterator)
-                    aug_features.append({'feature': f['feature'], 'label': f['label']})
+                    aug_features.append(f)
                 else:
                     noise = next(noise_iterator)['array']
-                    noise = nn_util.move_to_device(noise, self.cuda_device)
+                    noise = nn_util.move_to_device(noise, self._cuda_devices[0])
 
                     f = random.sample(aug_features, 1)[0]
-                    f = nn_util.move_to_device(f, self.cuda_device)
+                    f = nn_util.move_to_device(f, self._cuda_devices[0])
 
-                    generated = self.model.generator(f['feature'], noise, f['label'])['output']
-                    aug_features.append({'feature': generated.data.cpu(),
+                    generated = self.gan_model.generator(f['tokens'], noise, f['label'])['output']
+                    aug_features.append({'tokens': generated.data.cpu(),
                                          'label': f['label'].data.cpu()})
-        return aug_features
+
+                    gen_features.extend(generated.data.cpu().numpy())
+                    gen_labels.extend(f['label'].data.cpu().numpy())
+        logger.info("[Generating synthetic features] %s synthetic batches have been generated."
+                    % len(aug_features))
+        aug_features_ins = []
+        for batch in aug_features:
+            tokens = batch['tokens']
+            labels = batch['label']
+            for f, l in zip(tokens, labels):
+                aug_features_ins.append(Instance(
+                    {
+                        "tokens": ArrayField(f),
+                        "label": ArrayField(l)
+                    }
+                ))
+        return aug_features_ins, {"gen_features": gen_features, "gen_labels": gen_labels}
 
     def test(self) -> Any:
         logger.info("### Testing ###")
-        logger.info('[Load best model] ...')
+        # logger.info('[Load best model] ...')
+        # if self._serialization_dir:
+        #     best_model_state = self._checkpointer.best_model_state()
+        #     if best_model_state:
+        #         self.model.load_state_dict(best_model_state)
+        #         logger.info('[Loaded]')
+        logger.info('[Load last model] ...')
         if self._serialization_dir:
-            best_model_state = self._checkpointer.best_model_state()
-            if best_model_state:
-                self.model.load_state_dict(best_model_state)
-                logger.info('[Loaded]')
+            last_model_state_path = os.path.join(self._serialization_dir,
+                                                 'model_state_epoch_%s.th' % int(self.epochs_trained - 1))
+            self.model.load_state_dict(torch.load(last_model_state_path))
 
         if self.model:
 
@@ -499,7 +524,7 @@ class ClsFakeTrainer(TrainerBase):
                 y_true = []
                 y_pred = []
 
-                for batch in self.iterator(self._test_data, num_epochs=1, shuffle=False):
+                for batch in self.feature_iterator(self._test_data, num_epochs=1, shuffle=False):
                     batch = nn_util.move_to_device(batch, self._cuda_devices[0])
                     output_dict = self.model(**batch)
                     y_ = output_dict['logits']
@@ -511,7 +536,7 @@ class ClsFakeTrainer(TrainerBase):
                         'macro': sklearn.metrics.f1_score(y_true, y_pred, average='macro'),
                         'accuracy': sklearn.metrics.accuracy_score(y_true, y_pred)}
 
-    def train(self) -> Dict[str, Any]:
+    def train(self) -> Any:
         """
         Trains the supplied model with the supplied parameters.
         """
@@ -625,11 +650,12 @@ class ClsFakeTrainer(TrainerBase):
         self._tensorboard.close()
 
         # Load the best model state before returning
-        best_model_state = self._checkpointer.best_model_state()
-        if best_model_state:
-            self.model.load_state_dict(best_model_state)
+        # best_model_state = self._checkpointer.best_model_state()
+        # if best_model_state:
+        #     self.model.load_state_dict(best_model_state)
 
-        return metrics
+        self.epochs_trained = epochs_trained
+        return metrics, self.gen_data
 
     def _save_checkpoint(self, epoch: Union[int, str]) -> None:
         """
@@ -737,65 +763,36 @@ class ClsFakeTrainer(TrainerBase):
                     cache_prefix: str = None
                     ) -> "ClsFakeTrainer":
 
-        all_datasets = training_util.datasets_from_params(params, cache_directory, cache_prefix)
-        datasets_for_vocab_creation = set(params.pop("datasets_for_vocab_creation", all_datasets))
+        feature_path = params.pop('feature_path')
 
-        for dataset in datasets_for_vocab_creation:
-            if dataset not in all_datasets:
-                raise ConfigurationError(f"invalid 'dataset_for_vocab_creation' {dataset}")
+        train_feature_reader = DatasetReader.from_params(params.pop("train_feature_reader"))
+        validation_feature_reader = DatasetReader.from_params(params.pop("validation_feature_reader"))
+        test_feature_reader = DatasetReader.from_params(params.pop("test_feature_reader"))
+        noise_reader = DatasetReader.from_params(params.pop("noise_reader"))
 
-        logger.info("From dataset instances, %s will be considered for vocabulary creation.",
-                    ", ".join(datasets_for_vocab_creation))
+        train_data = train_feature_reader.read(feature_path)
+        validation_data = validation_feature_reader.read(feature_path)
+        test_data = test_feature_reader.read(feature_path)
+        noise_data = noise_reader.read("")
 
-        if recover and os.path.exists(os.path.join(serialization_dir, "vocabulary")):
-            vocab = Vocabulary.from_files(os.path.join(serialization_dir, "vocabulary"))
-            params.pop("vocabulary", {})
-        else:
-            vocab = Vocabulary.from_params(
-                params.pop("vocabulary", {}),
-                # Using a generator comprehension here is important
-                # because, being lazy, it allows us to not iterate over the
-                # dataset when directory_path is specified.
-                (instance for key, dataset in all_datasets.items()
-                 if key in datasets_for_vocab_creation for instance in dataset)
-            )
+        # Vocabulary
+        vocab_path = params.pop("vocab_path")
+        vocab = Vocabulary.from_files(vocab_path)
 
-        model = Model.from_params(vocab=vocab, params=params.pop('model'))
+        # Iterator
+        feature_iterator = DataIterator.from_params(params.pop("feature_iterator"))
+        feature_iterator.index_with(vocab)
+        noise_iterator = DataIterator.from_params(params.pop("noise_iterator"))
+        noise_iterator.index_with(vocab)
 
-        # If vocab extension is ON for training, embedding extension should also be
-        # done. If vocab and embeddings are already in sync, it would be a no-op.
-        model.extend_embedder_vocab()
-
-        # Initializing the model can have side effect of expanding the vocabulary
-        vocab.save_to_files(os.path.join(serialization_dir, "vocabulary"))
-
-        iterator = DataIterator.from_params(params.pop("iterator"))
-        iterator.index_with(model.vocab)
-        validation_iterator_params = params.pop("validation_iterator", None)
-        if validation_iterator_params:
-            validation_iterator = DataIterator.from_params(validation_iterator_params)
-            validation_iterator.index_with(model.vocab)
-        else:
-            validation_iterator = None
-
-        train_data = all_datasets['train']
-        validation_data = all_datasets.get('validation')
-        test_data = all_datasets.get('test')
+        # Model
+        cls_model = Model.from_params(params.pop("cls"), vocab=None)
+        gan_model = Model.from_params(params.pop("gan"), vocab=None)
+        gan_model.load_state_dict(torch.load(params.pop("best_gan_model_state_path")))
 
         trainer_params = params.pop("trainer")
-        no_grad_regexes = trainer_params.pop("no_grad", ())
-        for name, parameter in model.named_parameters():
-            if any(re.search(regex, name) for regex in no_grad_regexes):
-                parameter.requires_grad_(False)
-
-        frozen_parameter_names, tunable_parameter_names = \
-            get_frozen_and_tunable_parameter_names(model)
-        logger.info("Following parameters are Frozen  (without gradient):")
-        for name in frozen_parameter_names:
-            logger.info(name)
-        logger.info("Following parameters are Tunable (with gradient):")
-        for name in tunable_parameter_names:
-            logger.info(name)
+        for name, parameter in gan_model.named_parameters():
+            parameter.requires_grad_(False)
 
         patience = trainer_params.pop_int("patience", None)
         validation_metric = trainer_params.pop("validation_metric", "-loss")
@@ -807,16 +804,10 @@ class ClsFakeTrainer(TrainerBase):
         lr_scheduler_params = trainer_params.pop("learning_rate_scheduler", None)
         momentum_scheduler_params = trainer_params.pop("momentum_scheduler", None)
 
-        if isinstance(cuda_device, list):
-            model_device = cuda_device[0]
-        else:
-            model_device = cuda_device
-        if model_device >= 0:
-            # Moving model to GPU here so that the optimizer state gets constructed on
-            # the right device.
-            model = model.cuda(model_device)
+        cls_model = cls_model.cuda(cuda_device)
+        gan_model = gan_model.cuda(cuda_device)
 
-        parameters = [[n, p] for n, p in model.named_parameters() if p.requires_grad]
+        parameters = [[n, p] for n, p in cls_model.named_parameters() if p.requires_grad]
         optimizer = Optimizer.from_params(parameters, trainer_params.pop("optimizer"))
         if "moving_average" in trainer_params:
             moving_average = MovingAverage.from_params(
@@ -862,17 +853,22 @@ class ClsFakeTrainer(TrainerBase):
         should_log_learning_rate = trainer_params.pop_bool("should_log_learning_rate", False)
         log_batch_size_period = trainer_params.pop_int("log_batch_size_period", None)
 
+        gen_step = params.pop_int("gen_step")
+
         trainer_params.assert_empty(cls.__name__)
         return cls(
-            model,
+            cls_model,
+            gan_model,
             optimizer,
-            iterator,
+            feature_iterator,
+            noise_iterator,
             train_data,
             validation_data,
             test_data,
+            noise_data,
             patience=patience,
             validation_metric=validation_metric,
-            validation_iterator=validation_iterator,
+            validation_iterator=feature_iterator,
             shuffle=shuffle,
             num_epochs=num_epochs,
             serialization_dir=serialization_dir,
@@ -889,4 +885,5 @@ class ClsFakeTrainer(TrainerBase):
             should_log_learning_rate=should_log_learning_rate,
             log_batch_size_period=log_batch_size_period,
             moving_average=moving_average,
+            gen_step=gen_step
         )

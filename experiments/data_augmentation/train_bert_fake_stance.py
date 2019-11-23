@@ -25,6 +25,14 @@ np.random.seed(seed)
 
 def run():
     cfg = StanceConfig
+    model_real_dir = os.path.join(cfg.model_dir,
+                                  '_'.join(['ph', cfg.phase_real_str,
+                                            'lr', str(cfg.hp.lr),
+                                            'bs', str(cfg.hp.batch_size),
+                                            'h', str(cfg.hp.d_hidden),
+                                            'dp', str(cfg.hp.dropout),
+                                            'r', str(cfg.hp.file_ratio)
+                                            ]))
     model_fake_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_fake_str,
                                             'lr', str(cfg.hp.lr),
@@ -61,31 +69,48 @@ def run():
     params_ = Params(
         {
             "config_file": cfg,
-            "train_feature_path": cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
-            "validation_data_path": cfg.dev_path,
-            "test_data_path": cfg.test_path,
+            "feature_path": cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
 
             # Readers
-            "dataset_reader": {
-                "lazy": False,
-                "type": "text_dataset",
-                "tokenizer": {
-                    "word_splitter": "bert-basic"
-                },
-                "token_indexers": {
-                    "bert": {
-                        "type": "bert-pretrained",
-                        "pretrained_model": DirConfig.BERT_VOC,
-                        "max_pieces": max_pieces,
-                    }
-                }
+            "noise_reader": {
+                "type": "sampling",
+                "sampler": {"type": "normal"},
+                "dim": d_hidden,
+                "label_set": cfg.labels
             },
-            "iterator": {
+            "train_feature_reader": {
+                "type": "feature",
+                "f_type": "train"
+            },
+            "validation_feature_reader": {
+                "type": "feature",
+                "f_type": "validation"
+            },
+            "test_feature_reader": {
+                "type": "feature",
+                "f_type": "test"
+            },
+            # "feature_iterator": {
+            #     "type": "bucket",
+            #     "batch_size": batch_size,
+            #     "sorting_keys": [('feature', 'dimension_0')],
+            #     "skip_smaller_batches": True
+            # },
+
+            # Iterator
+            "noise_iterator": {
+                "type": "basic",
+                "batch_size": batch_size
+            },
+            "feature_iterator": {
                 "type": "bucket",
                 "batch_size": batch_size,
-                "sorting_keys": [('tokens', 'num_tokens')],
-                "track_epoch": False
+                "sorting_keys": [('tokens', 'dimension_0')],
+                "skip_smaller_batches": True
             },
+            "vocab_path": os.path.join(model_real_dir, 'vocabulary'),
+
+            # Model
             "cls": {
                 "type": "feature_classifier",
                 "text_field_embedder": {
@@ -107,7 +132,8 @@ def run():
                     "pretrained_model": DirConfig.BERT_MODEL,
                     "requires_grad": True
                 },
-                "feature_only": False
+                "num_labels": n_classes,
+                "feature_only": True
             },
             "best_gan_model_state_path": best_gan_model_state_path,
             "gan": {
@@ -163,23 +189,16 @@ def run():
                 "num_epochs": 1000,
                 "patience": patience,
                 "cuda_device": cuda_device,
-                "gen_step": gen_step,
             },
+            "gen_step": gen_step,
         })
 
-    trainer_ = TrainerBase.from_params(params_, model_dir)
-    trainer_.train()
+    trainer_ = TrainerBase.from_params(params_, model_fake_dir)
+    _, gen_data = trainer_.train()
     res_test = trainer_.test()
     pprint(res_test)
-    features = trainer_.feature_collection()
-    print(len(features['train_features']))
-    print(len(features['train_labels']))
-    print(len(features['validation_features']))
-    print(len(features['validation_labels']))
-    print(len(features['test_features']))
-    print(len(features['test_labels']))
     print('[saving] features ...')
-    torch.save(features, cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
+    torch.save(gen_data, cfg.train_fake_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
     print('[saved]')
 
 

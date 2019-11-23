@@ -67,6 +67,7 @@ def run():
                 "type": "gan"
             },
 
+            # Reader
             "noise_reader": {
                 "type": "sampling",
                 "sampler": {"type": "normal"},
@@ -75,7 +76,9 @@ def run():
             },
             "feature_reader": {
                 "type": "feature",
+                "f_type": "train"
             },
+
             # Iterators
             "noise_iterator": {
                 "type": "basic",
@@ -84,10 +87,11 @@ def run():
             "feature_iterator": {
                 "type": "bucket",
                 "batch_size": batch_size,
-                "sorting_keys": [('feature', 'dimension_0')],
+                "sorting_keys": [('tokens', 'dimension_0')],
                 "skip_smaller_batches": True
             },
             "vocab_path": os.path.join(model_real_dir, 'vocabulary'),
+
             # Model
             "best_cls_model_state_path": best_cls_model_state_path,
             "cls": {
