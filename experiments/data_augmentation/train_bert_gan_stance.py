@@ -27,18 +27,14 @@ def run():
     cfg = StanceConfig
     model_real_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_real_str,
-                                            'lr', str(cfg.hp.lr),
                                             'bs', str(cfg.hp.batch_size),
                                             'h', str(cfg.hp.d_hidden),
-                                            'dp', str(cfg.hp.dropout),
                                             'r', str(cfg.hp.file_ratio)
                                             ]))
     model_gan_dir = os.path.join(cfg.model_dir,
                                  '_'.join(['ph', cfg.phase_gan_str,
-                                           'lr', str(cfg.hp.lr),
                                            'bs', str(cfg.hp.batch_size),
                                            'h', str(cfg.hp.d_hidden),
-                                           'dp', str(cfg.hp.dropout),
                                            'r', str(cfg.hp.file_ratio)
                                            ]))
     if os.path.exists(model_gan_dir):
@@ -55,7 +51,6 @@ def run():
     patience = cfg.hp.patience
     conservative_rate = cfg.hp.conservative_rate
     batch_per_epoch = cfg.hp.batch_per_epoch
-    batch_per_generation = cfg.hp.batch_per_generation
     n_epoch = cfg.hp.n_epoch_gan
     best_cls_model_state_path = os.path.join(model_real_dir, 'best.th')
 
@@ -178,7 +173,6 @@ def run():
             "n_epoch": n_epoch,
 
             "batch_per_epoch": batch_per_epoch,
-            "batch_per_generation": batch_per_generation,
             "num_loop_discriminator": 5,
             "clip_value": 1,
         })

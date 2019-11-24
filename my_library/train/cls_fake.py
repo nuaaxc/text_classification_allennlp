@@ -464,7 +464,8 @@ class ClsFakeTrainer(TrainerBase):
 
     def feature_generation(self, K):
         logger.info("[Generating synthetic features] beginning ...")
-        aug_features = []  # for training
+        cache = []  # for training
+        aug_features = []
         gen_features = []  # for archiving
         gen_labels = []  # for archiving
         feature_iterator = self.feature_iterator(self.train_data, num_epochs=None, shuffle=True)
@@ -474,18 +475,19 @@ class ClsFakeTrainer(TrainerBase):
             for n in range(num_training_batches):
                 if k == 0:
                     f = next(feature_iterator)
-                    aug_features.append(f)
+                    cache.append(f)
                 else:
                     noise = next(noise_iterator)['array']
                     noise = nn_util.move_to_device(noise, self._cuda_devices[0])
 
-                    f = random.sample(aug_features, 1)[0]
+                    f = random.sample(cache, 1)[0]
                     f = nn_util.move_to_device(f, self._cuda_devices[0])
 
                     generated = self.gan_model.generator(f['tokens'], noise, f['label'])['output']
+                    cache.append({'tokens': generated.data.cpu(),
+                                  'label': f['label'].data.cpu()})
                     aug_features.append({'tokens': generated.data.cpu(),
                                          'label': f['label'].data.cpu()})
-
                     gen_features.extend(generated.data.cpu().numpy())
                     gen_labels.extend(f['label'].data.cpu().numpy())
         logger.info("[Generating synthetic features] %s synthetic batches have been generated."
@@ -505,17 +507,17 @@ class ClsFakeTrainer(TrainerBase):
 
     def test(self) -> Any:
         logger.info("### Testing ###")
-        # logger.info('[Load best model] ...')
-        # if self._serialization_dir:
-        #     best_model_state = self._checkpointer.best_model_state()
-        #     if best_model_state:
-        #         self.model.load_state_dict(best_model_state)
-        #         logger.info('[Loaded]')
-        logger.info('[Load last model] ...')
+        logger.info('[Load best model] ...')
         if self._serialization_dir:
-            last_model_state_path = os.path.join(self._serialization_dir,
-                                                 'model_state_epoch_%s.th' % int(self.epochs_trained - 1))
-            self.model.load_state_dict(torch.load(last_model_state_path))
+            best_model_state = self._checkpointer.best_model_state()
+            if best_model_state:
+                self.model.load_state_dict(best_model_state)
+                logger.info('[Loaded]')
+        # logger.info('[Load last model] ...')
+        # if self._serialization_dir:
+        #     last_model_state_path = os.path.join(self._serialization_dir,
+        #                                          'model_state_epoch_%s.th' % int(self.epochs_trained - 1))
+        #     self.model.load_state_dict(torch.load(last_model_state_path))
 
         if self.model:
 

@@ -27,8 +27,8 @@ from my_library.optimisation import GanOptimizer
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def aug_normal(f, cuda_device):
-    return f + 0.1 * torch.randn_like(f).cuda(cuda_device)
+# def aug_normal(f, cuda_device):
+#     return f + 0.1 * torch.randn_like(f).cuda(cuda_device)
 
 
 # def aug_uniform(f, cuda_device):
@@ -111,7 +111,6 @@ class GanTrainer(TrainerBase):
         self.conservative_rate = conservative_rate
         self.num_loop_discriminator = num_loop_discriminator
         self.batch_per_epoch = batch_per_epoch
-        self.batch_per_generation = batch_per_generation
 
         self.cuda_device = cuda_device
         self.clip_value = clip_value
@@ -122,8 +121,8 @@ class GanTrainer(TrainerBase):
         self.optimizer.stage = 'discriminator'
         self.optimizer.zero_grad()
 
-        for p in self.model.discriminator.parameters():  # reset requires_grad
-            p.requires_grad = True  # they are set to False below in netG update
+        for p in self.model.discriminator.parameters():
+            p.requires_grad = True
 
         # Real example
         real_validity = self.model.discriminator(f, label)["output"]
@@ -165,7 +164,7 @@ class GanTrainer(TrainerBase):
         cls_prediction_real = self.cls_model(f, label)['probs']
         kl = F.kl_div(cls_prediction_syn.log(), cls_prediction_real, reduction='batchmean')
 
-        fake_error = generated["loss"] + 10 * cls_results['loss'] + 10 * kl
+        fake_error = generated["loss"] + 10 * cls_results['loss'] + 1 * kl
         fake_error.backward()
 
         self.optimizer.step()
@@ -218,7 +217,7 @@ class GanTrainer(TrainerBase):
         g_label = []
         print(len(self.aug_features))
 
-        for i in range(self.batch_per_generation):
+        for i in range(int(self.batch_per_epoch / self.num_loop_discriminator)):
             f = self.sample_feature(feature_iterator, self.conservative_rate)
             noise = next(noise_iterator)['array']
             noise = nn_util.move_to_device(noise, self.cuda_device)
@@ -258,6 +257,7 @@ class GanTrainer(TrainerBase):
         d_loss_epochs = {}
         g_loss_epochs = {}
         gan_loss_epochs = {}
+        best_epoch = None
 
         # train over epochs
         for epoch in range(self.n_epoch):
@@ -272,7 +272,7 @@ class GanTrainer(TrainerBase):
             gan_loss_epochs[epoch] = train_metrics['gan_loss']
             g_data_epochs[epoch] = (train_metrics['g_data'], train_metrics['g_label'])
 
-            self._gan_loss_tracker.add_metric(gan_loss_epochs[epoch])
+            self._gan_loss_tracker.add_metric(g_loss_epochs[epoch])
 
             #########################
             # Create overall metrics
@@ -293,7 +293,8 @@ class GanTrainer(TrainerBase):
             # Save model
             #############
             self._save_checkpoint(epoch, self._gan_loss_tracker)
-
+            if self._gan_loss_tracker.is_best_so_far():
+                best_epoch = epoch
             epoch_elapsed_time = time.time() - epoch_start_time
             logger.info("Epoch duration: %s", datetime.timedelta(seconds=epoch_elapsed_time))
 
@@ -307,6 +308,7 @@ class GanTrainer(TrainerBase):
 
         meta_data = {
             'metrics': metrics,
+            'best_epoch': best_epoch,
             'g_data_epochs': g_data_epochs,
             'd_loss_epochs': d_loss_epochs,
             'g_loss_epochs': g_loss_epochs,
@@ -365,7 +367,6 @@ class GanTrainer(TrainerBase):
         conservative_rate = params.pop_float("conservative_rate")
         num_loop_discriminator = params.pop_int("num_loop_discriminator")
         batch_per_epoch = params.pop_int("batch_per_epoch")
-        batch_per_generation = params.pop_int("batch_per_generation")
         clip_value = params.pop_int("clip_value")
         params.pop("trainer")
         params.assert_empty(__name__)
@@ -390,5 +391,4 @@ class GanTrainer(TrainerBase):
                    conservative_rate=conservative_rate,
                    num_loop_discriminator=num_loop_discriminator,
                    batch_per_epoch=batch_per_epoch,
-                   batch_per_generation=batch_per_generation,
                    clip_value=clip_value)

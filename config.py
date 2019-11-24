@@ -32,8 +32,8 @@ class HP:
     lr = 0.00001
     patience = 5
     gen_step = 32 + 1
-    n_epoch_gan = 200
-    conservative_rate = 0.1
+    n_epoch_gan = 450
+    conservative_rate = 0.9
     batch_per_generation = 20
     d_hidden = 768
     dropout = 0.1
@@ -569,12 +569,14 @@ class StanceConfig(DirConfig):
     # hp.phase = DirConfig.phase_real_str
     hp.phase = DirConfig.phase_gan_str
     # hp.phase = 'fake'
-    hp.file_ratio = 0.5
+    hp.file_ratio = 1
     hp.batch_size = 16
-    hp.lr = 1e-5
+    # hp.lr = 1e-5
+    hp.lr = 1e-7
+    hp.dropout = 0.1
     hp.max_pieces = 128
-    hp.patience = 15
-    hp.gen_step = 16 + 1
+    hp.patience = 3
+    hp.gen_step = 128 + 1
     hp.training_size = {
         0.05: 129,
         0.1: 260,
@@ -632,7 +634,9 @@ class StanceConfig(DirConfig):
     train_fake_meta_path = os.path.join(result_dir, 'train_fake_meta_%s_%sp.th')
     test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
 
-    img_gen_feature_path = 'gen_feature_%s.png'
+    img_real_feature_path = 'real_features.png'
+    img_gen_feature_path = 'gen_features.png'
+    img_fake_feature_path = 'fake_features.png'
 
 
 class TRECConfig(DirConfig):

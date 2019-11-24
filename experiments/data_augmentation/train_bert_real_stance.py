@@ -27,10 +27,8 @@ def run():
     cfg = StanceConfig
     model_dir = os.path.join(cfg.model_dir,
                              '_'.join(['ph', cfg.phase_real_str,
-                                       'lr', str(cfg.hp.lr),
                                        'bs', str(cfg.hp.batch_size),
                                        'h', str(cfg.hp.d_hidden),
-                                       'dp', str(cfg.hp.dropout),
                                        'r', str(cfg.hp.file_ratio)
                                        ]))
 
