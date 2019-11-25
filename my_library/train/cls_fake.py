@@ -788,14 +788,13 @@ class ClsFakeTrainer(TrainerBase):
         noise_iterator.index_with(vocab)
 
         # Model
-        cls_model = Model.from_params(params.pop("cls"), vocab=None)
-        gan_model = Model.from_params(params.pop("gan"), vocab=None)
+        cls_model = Model.from_params(params.pop("cls"), vocab=vocab)
+        gan_model = Model.from_params(params.pop("gan"), vocab=vocab)
         gan_model.load_state_dict(torch.load(params.pop("best_gan_model_state_path")))
-
-        trainer_params = params.pop("trainer")
         for name, parameter in gan_model.named_parameters():
             parameter.requires_grad_(False)
 
+        trainer_params = params.pop("trainer")
         patience = trainer_params.pop_int("patience", None)
         validation_metric = trainer_params.pop("validation_metric", "-loss")
         shuffle = trainer_params.pop_bool("shuffle", True)

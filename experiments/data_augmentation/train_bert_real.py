@@ -1,30 +1,13 @@
-import logging
-import random
 import shutil
-import os
-import numpy as np
 from pprint import pprint
+import os
 import torch
 
 from allennlp.common.params import Params
-from allennlp.training.trainer import Trainer, TrainerBase
-
-import my_library
-
-from config import StanceConfig, DirConfig
-
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-logging.getLogger().setLevel(logging.INFO)
-
-seed = 2020
-
-torch.manual_seed(seed)
-random.seed(seed)
-np.random.seed(seed)
+from allennlp.training.trainer import TrainerBase
 
 
-def run():
-    cfg = StanceConfig
+def run(cfg):
     model_dir = os.path.join(cfg.model_dir,
                              '_'.join(['ph', cfg.phase_real_str,
                                        'bs', str(cfg.hp.batch_size),
@@ -61,7 +44,7 @@ def run():
                 "token_indexers": {
                     "bert": {
                         "type": "bert-pretrained",
-                        "pretrained_model": DirConfig.BERT_VOC,
+                        "pretrained_model": cfg.BERT_VOC,
                         "max_pieces": max_pieces,
                     }
                 }
@@ -82,7 +65,7 @@ def run():
                     "token_embedders": {
                         "bert": {
                             "type": "bert-pretrained",
-                            "pretrained_model": DirConfig.BERT_MODEL,
+                            "pretrained_model": cfg.BERT_MODEL,
                             "top_layer_only": True,
                             "requires_grad": True
                         }
@@ -90,7 +73,7 @@ def run():
                 },
                 "seq2vec_encoder": {
                     "type": "bert_pooler",
-                    "pretrained_model": DirConfig.BERT_MODEL,
+                    "pretrained_model": cfg.BERT_MODEL,
                     "requires_grad": True
                 },
                 "feature_only": False
@@ -125,6 +108,3 @@ def run():
     torch.save(features, cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
     print('[saved]')
 
-
-if __name__ == '__main__':
-    run()

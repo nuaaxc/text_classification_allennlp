@@ -1,30 +1,13 @@
-import logging
-import random
 import shutil
 import os
-import numpy as np
 from pprint import pprint
 import torch
 
 from allennlp.common.params import Params
-from allennlp.training.trainer import Trainer, TrainerBase
-
-import my_library
-
-from config import StanceConfig, DirConfig
-
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-logging.getLogger().setLevel(logging.INFO)
-
-seed = 2020
-
-torch.manual_seed(seed)
-random.seed(seed)
-np.random.seed(seed)
+from allennlp.training.trainer import TrainerBase
 
 
-def run():
-    cfg = StanceConfig
+def run(cfg):
     model_real_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_real_str,
                                             'bs', str(cfg.hp.batch_size),
@@ -84,13 +67,6 @@ def run():
                 "type": "feature",
                 "f_type": "test"
             },
-            # "feature_iterator": {
-            #     "type": "bucket",
-            #     "batch_size": batch_size,
-            #     "sorting_keys": [('feature', 'dimension_0')],
-            #     "skip_smaller_batches": True
-            # },
-
             # Iterator
             "noise_iterator": {
                 "type": "basic",
@@ -115,7 +91,7 @@ def run():
                     "token_embedders": {
                         "bert": {
                             "type": "bert-pretrained",
-                            "pretrained_model": DirConfig.BERT_MODEL,
+                            "pretrained_model": cfg.BERT_MODEL,
                             "top_layer_only": True,
                             "requires_grad": True
                         }
@@ -123,7 +99,7 @@ def run():
                 },
                 "seq2vec_encoder": {
                     "type": "bert_pooler",
-                    "pretrained_model": DirConfig.BERT_MODEL,
+                    "pretrained_model": cfg.BERT_MODEL,
                     "requires_grad": True
                 },
                 "num_labels": n_classes,
@@ -194,7 +170,3 @@ def run():
     print('[saving] features ...')
     torch.save(gen_data, cfg.train_fake_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
     print('[saved]')
-
-
-if __name__ == '__main__':
-    run()

@@ -28,7 +28,6 @@ from allennlp.training import util as training_util
 
 from my_library.optimisation import GanOptimizer
 from my_library.models.data_augmentation import Gan
-from config import DirConfig
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
