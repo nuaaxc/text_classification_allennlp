@@ -1,5 +1,5 @@
 from pprint import pprint
-from config import R8Config
+from config.r8 import R8Cfg
 
 
 def get_label(input_path):
@@ -24,8 +24,8 @@ def sanctity_check(input_path):
 
 
 if __name__ == '__main__':
-    get_label(R8Config.train_norm_path)
-    sanctity_check(R8Config.test_path)
+    get_label(R8Cfg.train_norm_path)
+    sanctity_check(R8Cfg.test_path)
 
 
 

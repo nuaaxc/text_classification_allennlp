@@ -9,14 +9,10 @@ from allennlp.training.trainer import TrainerBase
 def run(cfg):
     model_real_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_real_str,
-                                            'bs', str(cfg.hp.batch_size),
-                                            'h', str(cfg.hp.d_hidden),
                                             'r', str(cfg.hp.file_ratio)
                                             ]))
     model_gan_dir = os.path.join(cfg.model_dir,
                                  '_'.join(['ph', cfg.phase_gan_str,
-                                           'bs', str(cfg.hp.batch_size),
-                                           'h', str(cfg.hp.d_hidden),
                                            'r', str(cfg.hp.file_ratio)
                                            ]))
     if os.path.exists(model_gan_dir):
@@ -161,6 +157,6 @@ def run(cfg):
     trainer_ = TrainerBase.from_params(params_, model_gan_dir)
     meta_data_train = trainer_.train()
     # save training meta data
-    print('[saving] training meta data ...')
-    torch.save(meta_data_train, cfg.train_gan_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
-    print('[saved]')
+    # print('[saving] training meta data ...')
+    # torch.save(meta_data_train, cfg.train_gan_meta_path % (cfg.corpus_name, cfg.hp.file_ratio))
+    # print('[saved]')

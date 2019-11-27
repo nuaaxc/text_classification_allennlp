@@ -1,9 +1,9 @@
 from config.common import *
 
 
-class StanceCfg(DirCfg):
-    corpus_name = 'Stance'
-    max_vocab_size = 100000
+class SSTCfg(DirCfg):
+    corpus_name = 'SST'
+    max_vocab_size = 10000
     max_seq_len = 30
     hp = HP()
     # hp.phase = DirCfg.phase_real_str
@@ -11,26 +11,29 @@ class StanceCfg(DirCfg):
     hp.phase = DirCfg.phase_fake_str
     hp.file_ratio = 1
     hp.batch_size = 16
-    hp.max_pieces = 128
-    hp.patience = 3
+    hp.max_pieces = 256
+    hp.patience = 5
 
     hp.training_size = {
-        0.05: 129,
-        0.1: 260,
-        0.2: 523,
-        0.5: 1309,
-        1: 2621,
+        0.05: 345,
+        0.1: 692,
+        0.2: 1384,
+        0.5: 3460,
+        1: 6920,
     }
     hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
     if hp.phase == DirCfg.phase_real_str:               # real
         hp.lr = 1e-5
-        hp.tune_bert = True
+        hp.tune_bert = False
     elif hp.phase == DirCfg.phase_gan_str:              # gan
         hp.batch_per_epoch = 5 * hp.batch_per_epoch
         hp.lr = 1e-5
+        hp.n_epoch_gan = 450
     elif hp.phase == DirCfg.phase_fake_str:             # fake
+        hp.patience = 3
         hp.lr = 1e-5
-        hp.gen_step = 16 + 1
+        hp.gen_step = 128 + 1
+        hp.batch_size = 16
     else:
         raise ValueError('Phase name not found.')
 
@@ -46,13 +49,8 @@ class StanceCfg(DirCfg):
         root = ''
         root_local = ''
 
-    target = ['a', 'cc', 'fm', 'hc', 'la']
-
-    labels = [
-        '__label__FAVOR',
-        '__label__AGAINST',
-        '__label__NONE'
-    ]
+    labels = ['__label__positive',
+              '__label__negative']
 
     n_label = len(labels)
 
@@ -63,16 +61,14 @@ class StanceCfg(DirCfg):
 
     model_path = os.path.join(model_dir, 'model_%s.th')
 
-    train_raw_path = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-%s.txt')
-    train_raw_path_all_target = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-all.txt')
-    train_norm_path = os.path.join(data_dir, 'train_norm.txt')
+    train_raw_path = os.path.join(data_dir, 'train_tree.txt')
     train_path = os.path.join(data_dir, 'train_1p.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
 
+    dev_raw_path = os.path.join(data_dir, 'dev_tree.txt')
     dev_path = os.path.join(data_dir, 'dev.txt')
 
-    test_raw_path = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-%s.txt')
-    test_raw_path_all_target = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-all.txt')
+    test_raw_path = os.path.join(data_dir, 'test_tree.txt')
     test_path = os.path.join(data_dir, 'test.txt')
 
     train_real_meta_path = os.path.join(result_dir, 'train_real_meta_%s_%sp.th')

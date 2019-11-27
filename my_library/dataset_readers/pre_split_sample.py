@@ -2,11 +2,9 @@ import os
 import random
 from collections import defaultdict
 
-from config import (StanceConfig, YahooConfig,
-                    TRECConfig, SSTConfig,
-                    AGConfig, YelpFullConfig,
-                    AffectConfig, OffensiveConfig,
-                    NGConfig, R8Config)
+from config.stance import StanceCfg
+from config.sst import SSTCfg
+
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
 
@@ -268,8 +266,8 @@ def dataset_ag(sample_ratio, mode, seed):
 
 
 def dataset_sst(sample_ratio, seed):
-    train_ratio(train_path=SSTConfig.train_path,
-                train_ratio_path=SSTConfig.train_ratio_path % str(sample_ratio),
+    train_ratio(train_path=SSTCfg.train_path,
+                train_ratio_path=SSTCfg.train_ratio_path % str(sample_ratio),
                 encoding='utf-8',
                 skip_header=False,
                 sample_ratio=sample_ratio,
@@ -278,16 +276,16 @@ def dataset_sst(sample_ratio, seed):
 
 def dataset_stance(sample_ratio, mode, seed):
     if mode == 'split':
-        train_dev_split(train_raw_path=StanceConfig.train_norm_path,
-                        train_path=StanceConfig.train_path,
-                        dev_path=StanceConfig.dev_path,
+        train_dev_split(train_raw_path=StanceCfg.train_norm_path,
+                        train_path=StanceCfg.train_path,
+                        dev_path=StanceCfg.dev_path,
                         test_raw_path=None,
                         test_path=None,
                         label_index=0,
                         text_index=1)
     elif mode == 'sampling':
-        train_ratio(train_path=StanceConfig.train_path,
-                    train_ratio_path=StanceConfig.train_ratio_path % str(sample_ratio),
+        train_ratio(train_path=StanceCfg.train_path,
+                    train_ratio_path=StanceCfg.train_ratio_path % str(sample_ratio),
                     sample_ratio=sample_ratio,
                     seed=seed)
     else:
@@ -315,7 +313,7 @@ if __name__ == '__main__':
     # dataset_stance(sample_ratio=None, mode='split', seed=2020)
     # dataset_stance(sample_ratio=0.2, mode='sampling', seed=2020)
 
-    # dataset_sst(sample_ratio=0.05, seed=2020)
+    # dataset_sst(sample_ratio=0.5, seed=2020)
 
     # dataset_ag(sample_ratio=None, mode='split', seed=2020)
     # dataset_ag(sample_ratio=0.005, mode='sampling', seed=2020)

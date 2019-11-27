@@ -476,6 +476,7 @@ class ClsFakeTrainer(TrainerBase):
                 if k == 0:
                     f = next(feature_iterator)
                     cache.append(f)
+                    # aug_features.append(f)
                 else:
                     noise = next(noise_iterator)['array']
                     noise = nn_util.move_to_device(noise, self._cuda_devices[0])

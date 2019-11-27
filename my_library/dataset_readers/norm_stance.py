@@ -1,6 +1,6 @@
 import logging
 
-from config import StanceConfig
+from config.stance import StanceCfg
 from my_library.dataset_readers.pre_text_cleaning import clean_tweet_text
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -23,7 +23,7 @@ def baby_mention_stats():
 def merge_all_stance_target(input_file_path, output_file_path):
     with open(output_file_path, 'w', encoding='utf-8') as f_out:
         f_out.write('ID\tTarget\tTweet\tStance\n')
-        for stance_target in StanceConfig.target:
+        for stance_target in StanceCfg.target:
             print('processing %s ...' % stance_target)
             with open(input_file_path % stance_target, encoding='windows-1251') as f_in:
                 next(f_in)

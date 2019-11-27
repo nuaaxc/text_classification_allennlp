@@ -53,14 +53,14 @@ def visualize_three_groups(features1, labels1,
     t_markers = ['diamond'] * len(labels2)
     v_markers = ['triangle'] * len(labels3)
 
-    r_fill_colors = [bpa.all_palettes['Dark2'][cfg.n_label][label] for label in labels1]
+    r_fill_colors = [bpa.all_palettes['Dark2'][max(cfg.n_label, 3)][label] for label in labels1]
     # t_fill_colors = ['blue'] * len(t_labels)
-    t_fill_colors = [bpa.all_palettes['Dark2'][cfg.n_label][label] for label in labels2]
+    t_fill_colors = [bpa.all_palettes['Dark2'][max(cfg.n_label, 3)][label] for label in labels2]
     v_fill_colors = ['white'] * len(labels3)
 
     r_line_colors = ['white'] * len(labels1)
     t_line_colors = ['black'] * len(labels2)
-    v_line_colors = [bpa.all_palettes['Dark2'][cfg.n_label][int(label)] for label in labels3]
+    v_line_colors = [bpa.all_palettes['Dark2'][max(cfg.n_label, 3)][int(label)] for label in labels3]
 
     r_alphas = [0.5] * len(labels1)
     t_alphas = [1.] * len(labels2)
@@ -179,7 +179,9 @@ def visualize_gen_features(real_meta_path, gan_meta_path, test_meta_path,
 
 if __name__ == '__main__':
     # from config import TRECConfig as cfg
-    from config import StanceConfig as cfg
+    # from config.stance import StanceCfg as cfg
+    # from config.sst import SSTCfg as cfg
+    from config.r8 import R8Cfg as cfg
 
     img_dir = os.path.join(cfg.result_dir, '_'.join(['img', 'r', str(cfg.hp.file_ratio)]))
     if not os.path.exists(img_dir):

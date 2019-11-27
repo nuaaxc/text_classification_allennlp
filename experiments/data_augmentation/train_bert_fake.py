@@ -10,20 +10,14 @@ from allennlp.training.trainer import TrainerBase
 def run(cfg):
     model_real_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_real_str,
-                                            'bs', str(cfg.hp.batch_size),
-                                            'h', str(cfg.hp.d_hidden),
                                             'r', str(cfg.hp.file_ratio)
                                             ]))
     model_fake_dir = os.path.join(cfg.model_dir,
                                   '_'.join(['ph', cfg.phase_fake_str,
-                                            'bs', str(cfg.hp.batch_size),
-                                            'h', str(cfg.hp.d_hidden),
                                             'r', str(cfg.hp.file_ratio)
                                             ]))
     model_gan_dir = os.path.join(cfg.model_dir,
                                  '_'.join(['ph', cfg.phase_gan_str,
-                                           'bs', str(cfg.hp.batch_size),
-                                           'h', str(cfg.hp.d_hidden),
                                            'r', str(cfg.hp.file_ratio)
                                            ]))
     if os.path.exists(model_fake_dir):
@@ -93,7 +87,7 @@ def run(cfg):
                             "type": "bert-pretrained",
                             "pretrained_model": cfg.BERT_MODEL,
                             "top_layer_only": True,
-                            "requires_grad": True
+                            "requires_grad": False
                         }
                     }
                 },

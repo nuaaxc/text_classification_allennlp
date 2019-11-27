@@ -152,7 +152,7 @@ class GanTrainer(TrainerBase):
     def _train_generator(self, f, noise, label):
         self.optimizer.stage = 'generator'
         self.optimizer.zero_grad()
-        for p in self.model.discriminator.parameters():     # freeze discriminator
+        for p in self.model.discriminator.parameters():  # freeze discriminator
             p.requires_grad = False
 
         generated = self.model.generator(feature=f,
@@ -215,6 +215,7 @@ class GanTrainer(TrainerBase):
         # #################
         g_data = []
         g_label = []
+        cache = []
         print(len(self.aug_features))
 
         for i in range(int(self.batch_per_epoch / self.num_loop_discriminator)):
@@ -222,11 +223,16 @@ class GanTrainer(TrainerBase):
             noise = next(noise_iterator)['array']
             noise = nn_util.move_to_device(noise, self.cuda_device)
             generated = self.model.generator(f['tokens'], noise, f['label'])['output']
-            self.aug_features.append({'tokens': generated.data.cpu(),
-                                      'label': f['label'].data.cpu()})
-
+            # self.aug_features.append({'tokens': generated.data.cpu(),
+            #                           'label': f['label'].data.cpu()})
+            cache.append({'tokens': generated.data.cpu(),
+                          'label': f['label'].data.cpu()})
             g_data.append(generated.data.cpu().numpy())
             g_label.extend(f['label'].data.cpu().numpy())
+
+        # update aug_features
+        self.aug_features = cache
+
         return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data), g_label
 
     def _train_epoch(self, epoch: int) -> Any:

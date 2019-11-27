@@ -4,6 +4,9 @@ import numpy as np
 import torch
 import my_library
 from config.stance import *
+from config.sst import *
+from config.r8 import *
+from config.offensive import *
 from config.common import *
 from experiments.data_augmentation.train_bert_real import run as run_real
 from experiments.data_augmentation.train_bert_gan import run as run_gan
@@ -29,5 +32,42 @@ def stance():
         raise ValueError('phase name not found.')
 
 
+def sst():
+    if SSTCfg.hp.phase == DirCfg.phase_real_str:
+        run_real(SSTCfg)
+    elif SSTCfg.hp.phase == DirCfg.phase_gan_str:
+        run_gan(SSTCfg)
+    elif SSTCfg.hp.phase == DirCfg.phase_fake_str:
+        run_fake(SSTCfg)
+    else:
+        raise ValueError('phase name not found.')
+
+
+def r8():
+    if R8Cfg.hp.phase == DirCfg.phase_real_str:
+        run_real(R8Cfg)
+    elif R8Cfg.hp.phase == DirCfg.phase_gan_str:
+        run_gan(R8Cfg)
+    elif R8Cfg.hp.phase == DirCfg.phase_fake_str:
+        run_fake(R8Cfg)
+    else:
+        raise ValueError('phase name not found.')
+
+
+def offensive():
+    if OffensiveCfg.hp.phase == DirCfg.phase_real_str:
+        run_real(OffensiveCfg)
+    elif OffensiveCfg.hp.phase == DirCfg.phase_gan_str:
+        run_gan(OffensiveCfg)
+    elif OffensiveCfg.hp.phase == DirCfg.phase_fake_str:
+        run_fake(OffensiveCfg)
+    else:
+        raise ValueError('phase name not found.')
+
+
 if __name__ == '__main__':
-    stance()
+    # stance()
+    # sst()
+    # r8()
+    offensive()
+

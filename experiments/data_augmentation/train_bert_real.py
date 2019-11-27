@@ -10,8 +10,6 @@ from allennlp.training.trainer import TrainerBase
 def run(cfg):
     model_dir = os.path.join(cfg.model_dir,
                              '_'.join(['ph', cfg.phase_real_str,
-                                       'bs', str(cfg.hp.batch_size),
-                                       'h', str(cfg.hp.d_hidden),
                                        'r', str(cfg.hp.file_ratio)
                                        ]))
 
@@ -26,6 +24,7 @@ def run(cfg):
     cuda_device = cfg.hp.cuda_device
     patience = cfg.hp.patience
     max_pieces = cfg.hp.max_pieces
+    tune_bert = cfg.hp.tune_bert
 
     params_ = Params(
         {
@@ -67,14 +66,14 @@ def run(cfg):
                             "type": "bert-pretrained",
                             "pretrained_model": cfg.BERT_MODEL,
                             "top_layer_only": True,
-                            "requires_grad": True
+                            "requires_grad": tune_bert
                         }
                     }
                 },
                 "seq2vec_encoder": {
                     "type": "bert_pooler",
                     "pretrained_model": cfg.BERT_MODEL,
-                    "requires_grad": True
+                    "requires_grad": True,
                 },
                 "feature_only": False
             },
