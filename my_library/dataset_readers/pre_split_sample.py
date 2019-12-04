@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from config.stance import StanceCfg
 from config.sst import SSTCfg
+from config.trec import TRECCfg
 
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
@@ -292,26 +293,30 @@ def dataset_stance(sample_ratio, mode, seed):
         raise ValueError('unrecognized mode %s' % mode)
 
 
-def dataset_TREC(sample_ratio):
-    train_dev_split(train_raw_path=TRECConfig.train_norm_path,
-                    train_ratio_path=TRECConfig.train_ratio_path % str(sample_ratio),
-                    dev_ratio_path=TRECConfig.dev_ratio_path % str(sample_ratio),
-                    test_raw_path=TRECConfig.test_norm_path,
-                    test_path=TRECConfig.test_path % '100',
-                    encoding='windows-1251',
-                    sep='\t',
-                    label_index=0,
-                    text_index=1,
-                    skip_header=False,
-                    clean_text=clean_normal_text,
-                    sample_ratio=sample_ratio)
+def dataset_TREC(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=TRECCfg.train_norm_path,
+                        train_path=TRECCfg.train_path,
+                        dev_path=TRECCfg.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
+    elif mode == 'sampling':
+        train_ratio(train_path=TRECCfg.train_path,
+                    train_ratio_path=TRECCfg.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
 
 
 if __name__ == '__main__':
-    # dataset_TREC(sample_ratio=0.05)
+    # dataset_TREC(sample_ratio=None, mode='split', seed=2020)
+    # dataset_TREC(sample_ratio=0.5, mode='sampling', seed=2020)
 
     # dataset_stance(sample_ratio=None, mode='split', seed=2020)
-    # dataset_stance(sample_ratio=0.2, mode='sampling', seed=2020)
+    dataset_stance(sample_ratio=0.5, mode='sampling', seed=2032)
 
     # dataset_sst(sample_ratio=0.5, seed=2020)
 

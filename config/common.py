@@ -33,7 +33,7 @@ class HP:
     patience = 5
     gen_step = None
     n_epoch_gan = None
-    conservative_rate = 0.9
+    conservative_rate = None
     d_hidden = 768
     dropout = 0.1
     cuda_device = 0

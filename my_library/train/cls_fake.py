@@ -472,10 +472,11 @@ class ClsFakeTrainer(TrainerBase):
         noise_iterator = self.noise_iterator(self.noise_data)
         num_training_batches = math.ceil(self.feature_iterator.get_num_batches(self.train_data))
         for k in range(K):
+            tmp = []
             for n in range(num_training_batches):
                 if k == 0:
                     f = next(feature_iterator)
-                    cache.append(f)
+                    tmp.append(f)
                     # aug_features.append(f)
                 else:
                     noise = next(noise_iterator)['array']
@@ -485,12 +486,14 @@ class ClsFakeTrainer(TrainerBase):
                     f = nn_util.move_to_device(f, self._cuda_devices[0])
 
                     generated = self.gan_model.generator(f['tokens'], noise, f['label'])['output']
-                    cache.append({'tokens': generated.data.cpu(),
-                                  'label': f['label'].data.cpu()})
+                    tmp.append({'tokens': generated.data.cpu(),
+                                'label': f['label'].data.cpu()})
                     aug_features.append({'tokens': generated.data.cpu(),
                                          'label': f['label'].data.cpu()})
                     gen_features.extend(generated.data.cpu().numpy())
                     gen_labels.extend(f['label'].data.cpu().numpy())
+            cache = tmp
+
         logger.info("[Generating synthetic features] %s synthetic batches have been generated."
                     % len(aug_features))
         aug_features_ins = []

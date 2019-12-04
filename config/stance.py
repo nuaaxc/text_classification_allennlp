@@ -9,10 +9,10 @@ class StanceCfg(DirCfg):
     # hp.phase = DirCfg.phase_real_str
     # hp.phase = DirCfg.phase_gan_str
     hp.phase = DirCfg.phase_fake_str
-    hp.file_ratio = 1
-    hp.batch_size = 16
+    hp.file_ratio = 0.5
     hp.max_pieces = 128
-    hp.patience = 3
+    hp.patience = 5
+    hp.cuda_device = 0
 
     hp.training_size = {
         0.05: 129,
@@ -21,18 +21,27 @@ class StanceCfg(DirCfg):
         0.5: 1309,
         1: 2621,
     }
-    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
+
     if hp.phase == DirCfg.phase_real_str:               # real
         hp.lr = 1e-5
+        hp.batch_size = 16
         hp.tune_bert = True
     elif hp.phase == DirCfg.phase_gan_str:              # gan
-        hp.batch_per_epoch = 5 * hp.batch_per_epoch
         hp.lr = 1e-5
+        hp.n_epoch_gan = 800
+        hp.batch_size = 128
+        # hp.batch_size = 16
+        hp.conservative_rate = 0.8
     elif hp.phase == DirCfg.phase_fake_str:             # fake
+        hp.patience = 3
         hp.lr = 1e-5
-        hp.gen_step = 16 + 1
+        # hp.lr = 1e-8
+        hp.gen_step = 1 + 16
+        hp.batch_size = 1024
     else:
         raise ValueError('Phase name not found.')
+
+    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirCfg.home:
         root = os.path.join(DirCfg.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -83,3 +92,6 @@ class StanceCfg(DirCfg):
     img_real_feature_path = 'real_features.png'
     img_gen_feature_path = 'gen_features.png'
     img_fake_feature_path = 'fake_features.png'
+
+    img_quant_path = os.path.join(result_dir, 'quant_%s.png' % corpus_name)
+

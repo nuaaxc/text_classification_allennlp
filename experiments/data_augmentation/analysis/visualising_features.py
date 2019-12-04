@@ -43,6 +43,34 @@ def visualise(x, epoch, fill_color, line_color, alpha, marker,
         print('saved to %s.' % output_file)
 
 
+def visualize_two_groups(features1, labels1,
+                         features3, labels3,
+                         is_show,
+                         is_export,
+                         output_path):
+    r_markers = ['circle'] * len(labels1)
+    v_markers = ['triangle'] * len(labels3)
+
+    r_fill_colors = [bpa.all_palettes['Dark2'][max(cfg.n_label, 3)][label] for label in labels1]
+    v_fill_colors = ['white'] * len(labels3)
+
+    r_line_colors = ['white'] * len(labels1)
+    v_line_colors = [bpa.all_palettes['Dark2'][max(cfg.n_label, 3)][int(label)] for label in labels3]
+
+    r_alphas = [0.5] * len(labels1)
+    v_alphas = [1.] * len(labels3)
+
+    visualise(np.concatenate((features1, features3)),
+              '',
+              fill_color=r_fill_colors + v_fill_colors,
+              line_color=r_line_colors + v_line_colors,
+              alpha=r_alphas + v_alphas,
+              marker=r_markers + v_markers,
+              is_show=is_show,
+              is_export=is_export,
+              output_file=output_path)
+
+
 def visualize_three_groups(features1, labels1,
                            features2, labels2,
                            features3, labels3,
@@ -111,17 +139,23 @@ def visualize_fake_features(input_train_path, input_gen_path, output_path, is_sh
     gen_features = np.array(gen_data['gen_features'])
     gen_labels = np.array(gen_data['gen_labels'])
     print('# gen labels:', len(gen_labels))
-    sample_size = 2 * len(train_labels)
+    sample_size = min(len(gen_labels), 2 * len(train_labels), 5000)
     index_sample = random.sample(range(len(gen_labels)), sample_size)
     gen_features_sample = gen_features[index_sample]
     gen_labels_sample = gen_labels[index_sample]
 
-    visualize_three_groups(train_features, train_labels,
-                           test_features, test_labels,
-                           gen_features_sample, gen_labels_sample,
-                           is_show,
-                           is_export,
-                           output_path)
+    # visualize_three_groups(train_features, train_labels,
+    #                        test_features, test_labels,
+    #                        gen_features_sample, gen_labels_sample,
+    #                        is_show,
+    #                        is_export,
+    #                        output_path)
+
+    visualize_two_groups(train_features, train_labels,
+                         gen_features_sample, gen_labels_sample,
+                         is_show,
+                         is_export,
+                         output_path)
 
 
 def visualize_gen_features(real_meta_path, gan_meta_path, test_meta_path,
@@ -182,6 +216,8 @@ if __name__ == '__main__':
     # from config.stance import StanceCfg as cfg
     # from config.sst import SSTCfg as cfg
     from config.r8 import R8Cfg as cfg
+    # from config.offensive import OffensiveCfg as cfg
+    # from config.trec import TRECCfg as cfg
 
     img_dir = os.path.join(cfg.result_dir, '_'.join(['img', 'r', str(cfg.hp.file_ratio)]))
     if not os.path.exists(img_dir):

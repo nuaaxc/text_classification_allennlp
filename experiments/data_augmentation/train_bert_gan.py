@@ -31,6 +31,7 @@ def run(cfg):
     batch_per_epoch = cfg.hp.batch_per_epoch
     n_epoch = cfg.hp.n_epoch_gan
     best_cls_model_state_path = os.path.join(model_real_dir, 'best.th')
+    lr = cfg.hp.lr
 
     params_ = Params(
         {
@@ -137,11 +138,11 @@ def run(cfg):
                 "type": "gan",
                 "generator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.00005
+                    "lr": lr
                 },
                 "discriminator_optimizer": {
                     "type": "rmsprop",
-                    "lr": 0.00005
+                    "lr": lr
                 },
             },
             "batch_size": batch_size,

@@ -1,4 +1,4 @@
-from config import TRECConfig
+from config.trec import TRECCfg
 
 
 def norm(in_file_path, out_file_path):
@@ -12,5 +12,5 @@ def norm(in_file_path, out_file_path):
 
 
 if __name__ == '__main__':
-    norm(TRECConfig.train_raw_path, TRECConfig.train_norm_path)
-    norm(TRECConfig.test_raw_path, TRECConfig.test_norm_path)
+    norm(TRECCfg.train_raw_path, TRECCfg.train_norm_path)
+    norm(TRECCfg.test_raw_path, TRECCfg.test_path)

@@ -162,14 +162,22 @@ class GanTrainer(TrainerBase):
         cls_results = self.cls_model(generated['output'], label)
         cls_prediction_syn = cls_results['probs']
         cls_prediction_real = self.cls_model(f, label)['probs']
-        kl = F.kl_div(cls_prediction_syn.log(), cls_prediction_real, reduction='batchmean')
+        # kl = F.kl_div(cls_prediction_syn.log(), cls_prediction_real, reduction='batchmean')
+        kl = F.mse_loss(cls_prediction_syn, cls_prediction_real, reduction='mean')
 
-        fake_error = generated["loss"] + 10 * cls_results['loss'] + 1 * kl
+        assert kl == kl
+        assert generated["loss"] == generated["loss"]
+        assert cls_results['loss'] == cls_results['loss']
+
+        fake_error = generated["loss"] + 1 * cls_results['loss'] + 1 * kl
+        # fake_error = generated["loss"] + 1 * cls_results['loss']
+        # fake_error = generated["loss"] + 0.1 * kl
+        # fake_error = generated["loss"]
         fake_error.backward()
 
         self.optimizer.step()
 
-        return fake_error.item()
+        return generated["loss"].item(), cls_results['loss'].item(), kl.item(), fake_error.item()
 
     def sample_feature(self, feature_iterator, conservative_rate):
         """
@@ -186,6 +194,10 @@ class GanTrainer(TrainerBase):
     def _train_gan(self) -> Any:
         loss_d = []
         loss_g = []
+        loss_g_gen = []
+        loss_g_cls = []
+        loss_g_kl = []
+
         feature_iterator = self.feature_iterator(self.feature_dataset, num_epochs=None, shuffle=True)
         noise_iterator = self.noise_iterator(self.noise_dataset)
 
@@ -207,7 +219,11 @@ class GanTrainer(TrainerBase):
                 # ##########
                 # generator
                 # ##########
-                _loss_g = self._train_generator(f['tokens'], noise, f['label'])
+                _loss_gen, _loss_cls, _loss_kl, _loss_g \
+                    = self._train_generator(f['tokens'], noise, f['label'])
+                loss_g_gen.append(_loss_gen)
+                loss_g_cls.append(_loss_cls)
+                loss_g_kl.append(_loss_kl)
                 loss_g.append(_loss_g)
 
         # #################
@@ -218,7 +234,7 @@ class GanTrainer(TrainerBase):
         cache = []
         print(len(self.aug_features))
 
-        for i in range(int(self.batch_per_epoch / self.num_loop_discriminator)):
+        for i in range(int(self.batch_per_epoch)):
             f = self.sample_feature(feature_iterator, self.conservative_rate)
             noise = next(noise_iterator)['array']
             noise = nn_util.move_to_device(noise, self.cuda_device)
@@ -233,7 +249,8 @@ class GanTrainer(TrainerBase):
         # update aug_features
         self.aug_features = cache
 
-        return np.mean(loss_d), np.mean(loss_g), np.vstack(g_data), g_label
+        return np.mean(loss_d), np.mean(loss_g_gen), np.mean(loss_g_cls), \
+               np.mean(loss_g_kl), np.mean(loss_g), np.vstack(g_data), g_label
 
     def _train_epoch(self, epoch: int) -> Any:
 
@@ -242,13 +259,14 @@ class GanTrainer(TrainerBase):
 
         metrics = {}
 
-        loss_d, loss_g, g_data, g_label = self._train_gan()
+        loss_d, loss_g_gen, loss_g_cls, loss_g_kl, loss_g, g_data, g_label = self._train_gan()
         metrics.update({'d_loss': loss_d})
         metrics.update({'g_loss': loss_g})
         metrics.update({'gan_loss': 0.5 * (loss_d + loss_g)})
         metrics.update({'g_data': g_data})
         metrics.update({'g_label': g_label})
-        logger.info('[d_loss] %s, [g_loss] %s, [mean] %s' % (loss_d, loss_g, 0.5 * (loss_d + loss_g)))
+        logger.info('[d_loss] %s, [g_loss] %s (gen: %s, cls: %s, kl: %s), [mean] %s'
+                    % (loss_d, loss_g, loss_g_gen, loss_g_cls, loss_g_kl, 0.5 * (loss_d + loss_g)))
 
         return metrics
 
@@ -278,7 +296,8 @@ class GanTrainer(TrainerBase):
             gan_loss_epochs[epoch] = train_metrics['gan_loss']
             g_data_epochs[epoch] = (train_metrics['g_data'], train_metrics['g_label'])
 
-            self._gan_loss_tracker.add_metric(g_loss_epochs[epoch])
+            # self._gan_loss_tracker.add_metric(g_loss_epochs[epoch])
+            self._gan_loss_tracker.add_metric(gan_loss_epochs[epoch])
 
             #########################
             # Create overall metrics

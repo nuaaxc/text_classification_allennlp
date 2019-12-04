@@ -1,8 +1,8 @@
 from config.common import *
 
 
-class OffensiveCfg(DirCfg):
-    corpus_name = 'Offensive'
+class TRECCfg(DirCfg):
+    corpus_name = 'TREC'
     max_vocab_size = 10000
     max_seq_len = 30
     hp = HP()
@@ -15,30 +15,27 @@ class OffensiveCfg(DirCfg):
     hp.cuda_device = 0
 
     hp.training_size = {
-        0.05: 595,
-        0.1: 1191,
-        0.2: 2383,
-        0.5: 5958,
-        1: 11916,
+        0.05: 243,
+        0.1: 488,
+        0.2: 980,
+        0.5: 2450,
+        1: 4904,
     }
-
-    if hp.phase == DirCfg.phase_real_str:               # real
+    if hp.phase == DirCfg.phase_real_str:  # real
         hp.lr = 1e-5
+        hp.batch_size = 32
         hp.tune_bert = True
-        hp.batch_size = 16
-    elif hp.phase == DirCfg.phase_gan_str:              # gan
-        hp.lr = 1e-5
+    elif hp.phase == DirCfg.phase_gan_str:  # gan
+        hp.lr = 5e-4
         hp.n_epoch_gan = 800
         hp.batch_size = 128
-        # hp.batch_size = 16
-        hp.conservative_rate = 0.8
-    elif hp.phase == DirCfg.phase_fake_str:             # fake
+        hp.conservative_rate = 0.9
+    elif hp.phase == DirCfg.phase_fake_str:  # fake
         hp.patience = 5
-        # hp.lr = 1e-7
-        # hp.lr = 1e-6
         hp.lr = 1e-5
-        hp.gen_step = 1 + 64
-        hp.batch_size = 512
+        # hp.lr = 1e-7
+        hp.gen_step = 1 + 8
+        hp.batch_size = 16
     else:
         raise ValueError('Phase name not found.')
 
@@ -56,7 +53,8 @@ class OffensiveCfg(DirCfg):
         root = ''
         root_local = ''
 
-    labels = ['OFF', 'NOT']
+    # 6 classes
+    labels = ['NUM', 'DESC', 'HUM', 'LOC', 'ENTY', 'ABBR']
 
     n_label = len(labels)
 
@@ -65,15 +63,16 @@ class OffensiveCfg(DirCfg):
     model_dir = os.path.join(root_local, 'models')
     result_dir = os.path.join(root_local, 'results')
 
-    train_raw_path = os.path.join(data_dir, 'train_raw.tsv')
+    vocab_path = os.path.join(cache_dir, 'vocab')
+
+    train_raw_path = os.path.join(data_dir, 'train_raw.txt')
     train_norm_path = os.path.join(data_dir, 'train_norm.txt')
     train_path = os.path.join(data_dir, 'train_1p.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
-    ground_truth_path = os.path.join(data_dir, 'labels.csv')
 
     dev_path = os.path.join(data_dir, 'dev.txt')
 
-    test_raw_path = os.path.join(data_dir, 'test_raw.tsv')
+    test_raw_path = os.path.join(data_dir, 'test_raw.txt')
     test_path = os.path.join(data_dir, 'test.txt')
 
     train_real_meta_path = os.path.join(result_dir, 'train_real_meta_%s_%sp.th')
@@ -81,7 +80,7 @@ class OffensiveCfg(DirCfg):
     train_fake_meta_path = os.path.join(result_dir, 'train_fake_meta_%s_%sp.th')
     test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
 
-    mg_real_feature_path = 'real_features.png'
+    img_real_feature_path = 'real_features.png'
     img_gen_feature_path = 'gen_features.png'
     img_fake_feature_path = 'fake_features.png'
 
