@@ -316,7 +316,7 @@ if __name__ == '__main__':
     # dataset_TREC(sample_ratio=0.5, mode='sampling', seed=2020)
 
     # dataset_stance(sample_ratio=None, mode='split', seed=2020)
-    dataset_stance(sample_ratio=0.5, mode='sampling', seed=2032)
+    dataset_stance(sample_ratio=0.1, mode='sampling', seed=2049)
 
     # dataset_sst(sample_ratio=0.5, seed=2020)
 

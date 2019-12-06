@@ -82,8 +82,8 @@ def trec():
 
 if __name__ == '__main__':
     # stance()
-    sst()
+    # sst()
     # r8()
     # offensive()
-    # trec()
+    trec()
 

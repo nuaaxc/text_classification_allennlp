@@ -5,6 +5,7 @@ from bokeh.models import Legend
 from bokeh.layouts import column
 
 from config.trec import *
+from experiments.data_augmentation.analysis.utils import performance_gain
 
 results = {
     5: [92, 92.44, 93.22, 92.7, 92.18, 92.18, 92.18, 92.13],
@@ -16,7 +17,7 @@ results = {
 
 def performance_plot(is_export=False):
     x_axis = [-1, 0, 1, 2, 3, 4, 5, 6]
-    plot = bp.figure(plot_width=300, plot_height=250,
+    plot = bp.figure(plot_width=330, plot_height=200,
                      title='TREC (N=5,452)',
                      toolbar_location=None, tools="")
     plot.title.align = 'center'
@@ -25,6 +26,9 @@ def performance_plot(is_export=False):
     plot.yaxis.major_label_text_font_style = 'bold'
     plot.xaxis.major_label_text_font_size = '11pt'
     plot.xaxis.major_label_text_font_style = 'bold'
+    plot.yaxis.axis_label = 'Accuracy'
+    plot.yaxis.axis_label_text_font_style = 'bold'
+    plot.yaxis.axis_label_text_font_size = '13pt'
     legend_it = []
 
     c1 = plot.line(x_axis, results[5], color='red', line_width=2)
@@ -39,11 +43,11 @@ def performance_plot(is_export=False):
     c4 = plot.line(x_axis, results[100], color='purple', line_width=2)
     m4 = plot.triangle(x_axis, results[100], size=10, fill_color=None, line_color='purple', line_width=1)
 
-    legend_it.append(('5%', [c1, m1]))
+    legend_it.append(('10%', [c1, m1]))
     legend_it.append(('20%', [c2, m2]))
     legend_it.append(('50%', [c3, m3]))
     legend_it.append(('100%', [c4, m4]))
-    plot.xaxis.major_label_overrides = {-1: 'N'}
+    plot.xaxis.major_label_overrides = {-1: 'R'}
     legend = Legend(items=legend_it, location=(0, 0))
     legend.click_policy = "mute"
     legend.label_text_font_size = '14pt'
@@ -58,3 +62,4 @@ def performance_plot(is_export=False):
 if __name__ == '__main__':
     performance_plot(is_export=True)
     # performance_plot(is_export=False)
+    # performance_gain(results)

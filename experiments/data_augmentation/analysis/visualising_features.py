@@ -8,7 +8,63 @@ import bokeh.palettes as bpa
 from bokeh.io import show, export_png
 from sklearn.manifold import TSNE
 
+# from config.stance import StanceCfg as cfg
+# from config.sst import SSTCfg as cfg
+# from config.r8 import R8Cfg as cfg
+# from config.offensive import OffensiveCfg as cfg
+from config.trec import TRECCfg as cfg
+
 random_state = 2019
+
+# my_palettes = {
+#     0: 'red',
+#     1: 'blue',
+#     2: 'green',
+#     3: 'orange',
+#     4: 'purple',
+#     5: 'DimGrey'
+# }
+
+my_palettes = {
+    0: 'DimGrey',
+    1: 'blue',
+    2: 'green',
+    3: 'DarkOrange',
+    4: 'purple',
+    5: 'red'
+}
+
+
+def visualise_debug(x, epoch, fill_color, line_color, alpha, marker,
+              is_show=False, is_export=False, output_file=None):
+    tsne_model = TSNE(n_components=2,
+                      perplexity=50,
+                      learning_rate=10,
+                      verbose=1,
+                      random_state=random_state,
+                      init='pca')
+
+    tsne_points = tsne_model.fit_transform(x)
+
+    plot = bp.figure(plot_width=500, plot_height=500,
+                     title='Epoch: %s' % epoch,
+                     toolbar_location=None, tools="")
+
+    plot.scatter(x=tsne_points[:, 0],
+                 y=tsne_points[:, 1],
+                 size=5,
+                 fill_color=fill_color,
+                 line_color=line_color,
+                 fill_alpha=alpha,
+                 line_alpha=alpha,
+                 marker=marker)
+
+    if is_show:
+        show(plot)
+
+    if is_export:
+        export_png(plot, filename=output_file)
+        print('saved to %s.' % output_file)
 
 
 def visualise(x, epoch, fill_color, line_color, alpha, marker,
@@ -22,17 +78,20 @@ def visualise(x, epoch, fill_color, line_color, alpha, marker,
 
     tsne_points = tsne_model.fit_transform(x)
 
-    plot = bp.figure(plot_width=600, plot_height=600,
-                     title='Epoch: %s' % epoch,
+    plot = bp.figure(plot_width=200, plot_height=200,
+                     title='',
                      toolbar_location=None, tools="")
+    plot.grid.visible = False
+    plot.xaxis.visible = False
+    plot.yaxis.visible = False
 
     plot.scatter(x=tsne_points[:, 0],
                  y=tsne_points[:, 1],
-                 size=10,
+                 size=2,
+                 # size=1,
                  fill_color=fill_color,
                  line_color=line_color,
                  fill_alpha=alpha,
-                 line_alpha=alpha,
                  marker=marker)
 
     if is_show:
@@ -41,6 +100,31 @@ def visualise(x, epoch, fill_color, line_color, alpha, marker,
     if is_export:
         export_png(plot, filename=output_file)
         print('saved to %s.' % output_file)
+
+
+def visualize_one_group(features1, labels1,
+                        is_show,
+                        is_export,
+                        output_path):
+    r_markers = ['circle'] * len(labels1)
+
+    # r_fill_colors = [bpa.all_palettes['Set1'][max(cfg.n_label, 3)][int(label)] for label in labels1]
+    # r_line_colors = [bpa.all_palettes['Set1'][max(cfg.n_label, 3)][int(label)] for label in labels1]
+
+    r_fill_colors = [my_palettes[int(label)] for label in labels1]
+    r_line_colors = [my_palettes[int(label)] for label in labels1]
+
+    r_alphas = [0.5] * len(labels1)
+
+    visualise(features1,
+              '',
+              fill_color=r_fill_colors,
+              line_color=r_line_colors,
+              alpha=r_alphas,
+              marker=r_markers,
+              is_show=is_show,
+              is_export=is_export,
+              output_file=output_path)
 
 
 def visualize_two_groups(features1, labels1,
@@ -105,7 +189,21 @@ def visualize_three_groups(features1, labels1,
               output_file=output_path)
 
 
-def visualize_real_features(input_path, output_path, is_show=False, is_export=False):
+def visualize_real_features_train(input_path, output_path, is_show=False, is_export=False):
+    """
+    Visualization of real train/validation/test features
+    """
+    features = torch.load(input_path)
+    train_features = features['train_features']
+    train_labels = features['train_labels']
+
+    visualize_one_group(train_features, train_labels,
+                        is_show,
+                        is_export,
+                        output_path)
+
+
+def visualize_real_features_train_dev_test(input_path, output_path, is_show=False, is_export=False):
     """
     Visualization of real train/validation/test features
     """
@@ -123,6 +221,25 @@ def visualize_real_features(input_path, output_path, is_show=False, is_export=Fa
                            is_show,
                            is_export,
                            output_path)
+
+
+def visualize_gen_features(input_gen_path, output_path, is_show=False, is_export=False):
+    gen_data = torch.load(input_gen_path)
+    gen_features = np.array(gen_data['gen_features'])
+    gen_labels = np.array(gen_data['gen_labels'])
+    print('# gen labels:', len(gen_labels))
+    sample_size = min(len(gen_labels),
+                      cfg.hp.training_size[cfg.hp.file_ratio] * (cfg.hp.gen_step - 1),
+                      10000)
+    print('sample_size:', sample_size)
+    index_sample = random.sample(range(len(gen_labels)), sample_size)
+    gen_features_sample = gen_features[index_sample]
+    gen_labels_sample = gen_labels[index_sample]
+
+    visualize_one_group(gen_features_sample, gen_labels_sample,
+                        is_show,
+                        is_export,
+                        output_path)
 
 
 def visualize_fake_features(input_train_path, input_gen_path, output_path, is_show=False, is_export=False):
@@ -158,8 +275,8 @@ def visualize_fake_features(input_train_path, input_gen_path, output_path, is_sh
                          output_path)
 
 
-def visualize_gen_features(real_meta_path, gan_meta_path, test_meta_path,
-                           corpus_name, file_ratio):
+def visualize_gen_features_old(real_meta_path, gan_meta_path, test_meta_path,
+                               corpus_name, file_ratio):
     real_meta_data = torch.load(real_meta_path % (corpus_name, file_ratio))
     real_train_features, real_training_labels = \
         real_meta_data['r_data_epochs'][real_meta_data['metrics']['best_epoch']]
@@ -212,28 +329,25 @@ def visualize_gen_features(real_meta_path, gan_meta_path, test_meta_path,
 
 
 if __name__ == '__main__':
-    # from config import TRECConfig as cfg
-    # from config.stance import StanceCfg as cfg
-    # from config.sst import SSTCfg as cfg
-    from config.r8 import R8Cfg as cfg
-    # from config.offensive import OffensiveCfg as cfg
-    # from config.trec import TRECCfg as cfg
 
     img_dir = os.path.join(cfg.result_dir, '_'.join(['img', 'r', str(cfg.hp.file_ratio)]))
     if not os.path.exists(img_dir):
         os.makedirs(img_dir)
 
-    # visualize_real_features(input_path=cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
-    #                         output_path=os.path.join(img_dir, cfg.img_real_feature_path),
-    #                         is_show=True, is_export=True)
+    # visualize_real_features_train(input_path=cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
+    #                               output_path=os.path.join(img_dir, cfg.img_real_feature_path %
+    #                                                        (cfg.corpus_name, int(cfg.hp.file_ratio * 100))),
+    #                               is_show=True,
+    #                               is_export=True)
 
-    # visualize_gen_features(cfg.train_real_meta_path,
-    #                    cfg.train_fake_meta_path,
-    #                    cfg.test_meta_path,
-    #                    cfg.corpus_name,
-    #                    cfg.HP.file_ratio)
+    visualize_gen_features(cfg.train_fake_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
+                           output_path=os.path.join(img_dir, cfg.img_fake_feature_path %
+                                                    (cfg.corpus_name, int(cfg.hp.file_ratio * 100))),
+                           is_show=True,
+                           is_export=True)
 
-    visualize_fake_features(cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
-                            cfg.train_fake_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
-                            output_path=os.path.join(img_dir, cfg.img_fake_feature_path),
-                            is_show=True, is_export=True)
+    # visualize_fake_features(cfg.train_real_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
+    #                         cfg.train_fake_meta_path % (cfg.corpus_name, cfg.hp.file_ratio),
+    #                         output_path=os.path.join(img_dir, cfg.img_fake_feature_path),
+    #                         is_show=True,
+    #                         is_export=True)

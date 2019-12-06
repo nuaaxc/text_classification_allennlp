@@ -5,6 +5,7 @@ from bokeh.models import Legend
 from bokeh.layouts import column
 
 from config.stance import *
+from experiments.data_augmentation.analysis.utils import performance_gain
 
 results = {
     5: [40.54, 42.88, 43.93, 45.33, 43.13, 47.46, 46.94, 46.51],
@@ -16,8 +17,8 @@ results = {
 
 def performance_plot(is_export=False):
     x_axis = [-1, 0, 1, 2, 3, 4, 5, 6]
-    plot = bp.figure(plot_width=200, plot_height=250,
-                     title='Stance (N=4,163)',
+    plot = bp.figure(plot_width=220, plot_height=200,
+                     title='ST (N=4,163)',
                      toolbar_location=None, tools="")
     plot.title.align = 'center'
     plot.title.text_font_size = '15pt'
@@ -25,6 +26,9 @@ def performance_plot(is_export=False):
     plot.yaxis.major_label_text_font_style = 'bold'
     plot.xaxis.major_label_text_font_size = '11pt'
     plot.xaxis.major_label_text_font_style = 'bold'
+    plot.yaxis.axis_label = 'F1-Macro'
+    plot.yaxis.axis_label_text_font_style = 'bold'
+    plot.yaxis.axis_label_text_font_size = '13pt'
 
     plot.line(x_axis, results[5], color='red', line_width=2)
     plot.square(x_axis, results[5], size=10, fill_color=None, line_color='red', line_width=1)
@@ -38,7 +42,7 @@ def performance_plot(is_export=False):
     plot.line(x_axis, results[100], color='purple', line_width=2)
     plot.triangle(x_axis, results[100], size=10, fill_color=None, line_color='purple', line_width=1)
 
-    plot.xaxis.major_label_overrides = {-1: 'N'}
+    plot.xaxis.major_label_overrides = {-1: 'R'}
 
     show(plot)
 
@@ -50,3 +54,4 @@ def performance_plot(is_export=False):
 if __name__ == '__main__':
     performance_plot(is_export=True)
     # performance_plot(is_export=False)
+    # performance_gain(results)

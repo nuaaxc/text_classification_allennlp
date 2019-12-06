@@ -9,7 +9,7 @@ class StanceCfg(DirCfg):
     # hp.phase = DirCfg.phase_real_str
     # hp.phase = DirCfg.phase_gan_str
     hp.phase = DirCfg.phase_fake_str
-    hp.file_ratio = 0.5
+    hp.file_ratio = 1
     hp.max_pieces = 128
     hp.patience = 5
     hp.cuda_device = 0
@@ -29,15 +29,15 @@ class StanceCfg(DirCfg):
     elif hp.phase == DirCfg.phase_gan_str:              # gan
         hp.lr = 1e-5
         hp.n_epoch_gan = 800
-        hp.batch_size = 128
-        # hp.batch_size = 16
-        hp.conservative_rate = 0.8
+        # hp.batch_size = 128
+        hp.batch_size = 16
+        hp.conservative_rate = 0.0
     elif hp.phase == DirCfg.phase_fake_str:             # fake
         hp.patience = 3
         hp.lr = 1e-5
         # hp.lr = 1e-8
         hp.gen_step = 1 + 16
-        hp.batch_size = 1024
+        hp.batch_size = 64
     else:
         raise ValueError('Phase name not found.')
 
@@ -89,9 +89,9 @@ class StanceCfg(DirCfg):
     train_fake_meta_path = os.path.join(result_dir, 'train_fake_meta_%s_%sp.th')
     test_meta_path = os.path.join(result_dir, 'test_meta_%s_%sp.th')
 
-    img_real_feature_path = 'real_features.png'
-    img_gen_feature_path = 'gen_features.png'
-    img_fake_feature_path = 'fake_features.png'
+    img_real_feature_path = 'real_features_%s_%s.png'
+    img_gen_feature_path = 'gen_features_%s_%s.png'
+    img_fake_feature_path = 'fake_features_%s_%s.png'
 
     img_quant_path = os.path.join(result_dir, 'quant_%s.png' % corpus_name)
 
