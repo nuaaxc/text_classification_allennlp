@@ -6,6 +6,27 @@ from my_library.dataset_readers.pre_text_cleaning import clean_tweet_text
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+def count_vocab_size():
+    vocab = set()
+    with open(StanceCfg.train_norm_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip().split('\t')
+            if not line or len(line) != 2:
+                raise ValueError('Invalid row found. %s' % line)
+            _, text = line
+            print(text.split())
+            vocab.update(text.split())
+
+    with open(StanceCfg.test_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip().split('\t')
+            if not line or len(line) != 2:
+                raise ValueError('Invalid row found. %s' % line)
+            _, text = line
+            vocab.update(text.split())
+    print(len(vocab))
+
+
 def baby_mention_stats():
     filename = 'C:/Users/nuaax/OneDrive/data61/project/stance_classification/dataset/semeval/data/la-all.txt'
     labels = []
@@ -60,6 +81,7 @@ if __name__ == '__main__':
     #                StanceConfig.test_path,
     #                clean_tweet_text,
     #                skip_header=True)
+    count_vocab_size()
     pass
 
 
