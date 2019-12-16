@@ -30,5 +30,5 @@ class TextDatasetReader(DatasetReader):
         text_field = TextField(tokenized_text, self._token_indexers)
         fields = {'tokens': text_field}
         if label is not None:
-            fields['label'] = LabelField(label)
+            fields['labels'] = LabelField(label)
         return Instance(fields)

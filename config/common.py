@@ -7,7 +7,9 @@ class DirCfg(object):
     if 'C:' in home:
         W2V_DIR = os.path.join(home, 'Downloads/dataset/word_vec/')
         GLOVE_840B_300D = os.path.join(W2V_DIR, 'glove.840B.300d.txt')
+        GLOVE_840B_300D_DIM = 300
         GLOVE_TWITTER_27B_200D = os.path.join(W2V_DIR, 'glove.twitter.27B.200d.txt')
+        GLOVE_TWITTER_27B_200D_DIM = 200
         BERT_VOC = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased-vocab.txt')
         BERT_MODEL = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased.tar.gz')
 
@@ -28,7 +30,6 @@ class DirCfg(object):
 
 
 class HP:
-    training_size = {}
     lr = None
     patience = 5
     gen_step = None
@@ -38,4 +39,8 @@ class HP:
     dropout = 0.1
     cuda_device = 0
     tune_bert = None
+    d_rnn = 128
+    d_dense = 128
+    filter_width = 5
+    num_filters = 128
 

@@ -534,7 +534,7 @@ class ClsRealTrainer(TrainerBase):
                     output_dict = self.model(**batch)
                     y_ = output_dict['logits']
 
-                    y_true.extend(batch['label'].data.cpu().numpy())
+                    y_true.extend(batch['labels'].data.cpu().numpy())
                     y_pred.extend(y_.max(1)[1].cpu().numpy())
 
                 return {'micro': sklearn.metrics.f1_score(y_true, y_pred, average='micro'),

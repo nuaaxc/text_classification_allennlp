@@ -1,1 +1,2 @@
-from my_library.models import *
+from my_library.models.text_classifier import TextClassifier
+

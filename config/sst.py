@@ -5,43 +5,6 @@ class SSTCfg(DirCfg):
     corpus_name = 'SST'
     max_vocab_size = 10000
     max_seq_len = 30
-    hp = HP()
-    # hp.phase = DirCfg.phase_real_str
-    # hp.phase = DirCfg.phase_gan_str
-    hp.phase = DirCfg.phase_fake_str
-    hp.file_ratio = 1
-    hp.max_pieces = 256
-    hp.patience = 5
-    hp.cuda_device = 0
-
-    hp.training_size = {
-        0.05: 345,
-        0.1: 692,
-        0.2: 1384,
-        0.5: 3460,
-        1: 6920,
-    }
-
-    if hp.phase == DirCfg.phase_real_str:               # real
-        hp.lr = 1e-5
-        hp.tune_bert = True
-        hp.batch_size = 16
-    elif hp.phase == DirCfg.phase_gan_str:              # gan
-        hp.lr = 1e-5
-        hp.n_epoch_gan = 800
-        hp.batch_size = 128
-        # hp.batch_size = 16
-        hp.conservative_rate = 0.0
-    elif hp.phase == DirCfg.phase_fake_str:             # fake
-        hp.patience = 5
-        hp.lr = 1e-5
-        # hp.lr = 1e-7
-        hp.gen_step = 1 + 16
-        hp.batch_size = 32
-    else:
-        raise ValueError('Phase name not found.')
-
-    hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
     if 'C:' in DirCfg.home:
         root = os.path.join(DirCfg.home, 'OneDrive/data61/project/%s/dataset/%s'
@@ -54,6 +17,14 @@ class SSTCfg(DirCfg):
     else:
         root = ''
         root_local = ''
+
+    training_size = {
+        0.05: 345,
+        0.1: 692,
+        0.2: 1384,
+        0.5: 3460,
+        1: 6920,
+    }
 
     labels = ['__label__positive',
               '__label__negative']
@@ -88,3 +59,62 @@ class SSTCfg(DirCfg):
 
     img_quant_path = os.path.join(result_dir, 'quant_%s.png' % corpus_name)
 
+
+class SSTCfgBert(SSTCfg):
+    model_name = 'bert'
+    hp = HP()
+    # hp.phase = DirCfg.phase_real_str
+    # hp.phase = DirCfg.phase_gan_str
+    hp.phase = DirCfg.phase_fake_str
+    hp.file_ratio = 1
+    hp.max_pieces = 256
+    hp.patience = 5
+    hp.cuda_device = 0
+
+    if hp.phase == DirCfg.phase_real_str:  # real
+        hp.lr = 1e-5
+        hp.tune_bert = True
+        hp.batch_size = 16
+    elif hp.phase == DirCfg.phase_gan_str:  # gan
+        hp.lr = 1e-5
+        hp.n_epoch_gan = 800
+        hp.batch_size = 128
+        # hp.batch_size = 16
+        hp.conservative_rate = 0.0
+    elif hp.phase == DirCfg.phase_fake_str:  # fake
+        hp.patience = 5
+        hp.lr = 1e-5
+        # hp.lr = 1e-7
+        hp.gen_step = 1 + 16
+        hp.batch_size = 32
+    else:
+        raise ValueError('Phase name not found.')
+
+    hp.batch_per_epoch = int(SSTCfg.training_size[hp.file_ratio] / hp.batch_size) + 1
+
+
+class SSTCfgLSTM(SSTCfg):
+    model_name = 'lstm'
+    hp = HP()
+    hp.phase = DirCfg.phase_real_str
+    hp.file_ratio = 1
+    hp.patience = 2
+    hp.cuda_device = 0
+    hp.lr = 1e-4
+    hp.batch_size = 16
+    hp.d_rnn = 64
+    hp.d_dense = 128
+
+
+class SSTCfgCNN(SSTCfg):
+    model_name = 'cnn'
+    hp = HP()
+    hp.phase = DirCfg.phase_real_str
+    hp.file_ratio = 1
+    hp.patience = 2
+    hp.cuda_device = 0
+    hp.lr = 1e-4
+    hp.batch_size = 16
+    hp.filter_width = 5
+    hp.num_filters = 128
+    hp.d_dense = 128
