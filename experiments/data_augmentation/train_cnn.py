@@ -6,7 +6,7 @@ import torch
 import my_library
 
 from config.common import *
-from config.stance import *
+from config.stance import StanceCfgCNN
 from config.sst import SSTCfgCNN
 from config.r8 import *
 from config.offensive import *
@@ -24,8 +24,8 @@ np.random.seed(seed)
 
 
 def stance():
-    if StanceCfg.hp.phase == DirCfg.phase_real_str:
-        run_real(StanceCfg)
+    if StanceCfgCNN.hp.phase == DirCfg.phase_real_str:
+        run_real(StanceCfgCNN)
     else:
         raise ValueError('phase name not found.')
 
@@ -59,8 +59,8 @@ def trec():
 
 
 if __name__ == '__main__':
-    # stance()
-    sst()
+    stance()
+    # sst()
     # r8()
     # offensive()
     # trec()

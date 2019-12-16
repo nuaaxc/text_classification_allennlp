@@ -41,6 +41,7 @@ class SSTCfg(DirCfg):
     train_raw_path = os.path.join(data_dir, 'train_tree.txt')
     train_path = os.path.join(data_dir, 'train_1p.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
+    eda_train_ratio_path = os.path.join(data_dir, 'eda_train_%sp.txt')
 
     dev_raw_path = os.path.join(data_dir, 'dev_tree.txt')
     dev_path = os.path.join(data_dir, 'dev.txt')
@@ -98,7 +99,7 @@ class SSTCfgLSTM(SSTCfg):
     hp = HP()
     hp.phase = DirCfg.phase_real_str
     hp.file_ratio = 1
-    hp.patience = 2
+    hp.patience = 3
     hp.cuda_device = 0
     hp.lr = 1e-4
     hp.batch_size = 16
@@ -110,8 +111,8 @@ class SSTCfgCNN(SSTCfg):
     model_name = 'cnn'
     hp = HP()
     hp.phase = DirCfg.phase_real_str
-    hp.file_ratio = 1
-    hp.patience = 2
+    hp.file_ratio = 0.1
+    hp.patience = 3
     hp.cuda_device = 0
     hp.lr = 1e-4
     hp.batch_size = 16
