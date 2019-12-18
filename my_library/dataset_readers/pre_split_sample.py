@@ -6,6 +6,8 @@ from config.stance import StanceCfg
 from config.sst import SSTCfg
 from config.trec import TRECCfg
 from config.subj import SubjCfg
+from config.cr import CRCfg
+from config.mr import MRCfg
 
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
@@ -330,6 +332,42 @@ def dataset_subj(sample_ratio, mode, seed):
         raise ValueError('unrecognized mode %s' % mode)
 
 
+def dataset_cr(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=CRCfg.train_norm_path,
+                        train_path=CRCfg.train_path,
+                        dev_path=CRCfg.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
+    elif mode == 'sampling':
+        train_ratio(train_path=CRCfg.train_path,
+                    train_ratio_path=CRCfg.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
+def dataset_mr(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=MRCfg.train_norm_path,
+                        train_path=MRCfg.train_path,
+                        dev_path=MRCfg.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
+    elif mode == 'sampling':
+        train_ratio(train_path=MRCfg.train_path,
+                    train_ratio_path=MRCfg.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
 if __name__ == '__main__':
     # dataset_TREC(sample_ratio=None, mode='split', seed=2020)
     # dataset_TREC(sample_ratio=0.5, mode='sampling', seed=2020)
@@ -357,5 +395,11 @@ if __name__ == '__main__':
     # dataset_r8(sample_ratio=0.5, mode='sampling', seed=2028)
 
     # dataset_subj(sample_ratio=None, mode='split', seed=2020)
-    dataset_subj(sample_ratio=0.01, mode='sampling', seed=2020)
+    # dataset_subj(sample_ratio=0.01, mode='sampling', seed=2020)
+
+    # dataset_cr(sample_ratio=None, mode='split', seed=2020)
+    # dataset_cr(sample_ratio=0.5, mode='sampling', seed=2020)
+
+    # dataset_mr(sample_ratio=None, mode='split', seed=2020)
+    # dataset_mr(sample_ratio=0.5, mode='sampling', seed=2020)
     pass

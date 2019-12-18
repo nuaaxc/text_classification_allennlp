@@ -9,6 +9,8 @@ from config.common import *
 from config.stance import StanceCfgCNN
 from config.sst import SSTCfgCNN
 from config.subj import SubjCfgCNN
+from config.cr import CRCfgCNN
+from config.mr import MRCfgCNN
 from config.r8 import *
 from config.offensive import *
 from config.trec import *
@@ -22,6 +24,20 @@ seed = 2020
 torch.manual_seed(seed)
 random.seed(seed)
 np.random.seed(seed)
+
+
+def mr():
+    if MRCfgCNN.hp.phase == DirCfg.phase_real_str:
+        run_real(MRCfgCNN)
+    else:
+        raise ValueError('phase name not found.')
+
+
+def cr():
+    if CRCfgCNN.hp.phase == DirCfg.phase_real_str:
+        run_real(CRCfgCNN)
+    else:
+        raise ValueError('phase name not found.')
 
 
 def subj():
@@ -67,7 +83,9 @@ def trec():
 
 
 if __name__ == '__main__':
-    subj()
+    mr()
+    # cr()
+    # subj()
     # stance()
     # sst()
     # r8()
