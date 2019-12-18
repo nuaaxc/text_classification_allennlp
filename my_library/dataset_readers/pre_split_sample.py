@@ -5,6 +5,7 @@ from collections import defaultdict
 from config.stance import StanceCfg
 from config.sst import SSTCfg
 from config.trec import TRECCfg
+from config.subj import SubjCfg
 
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
@@ -311,12 +312,30 @@ def dataset_TREC(sample_ratio, mode, seed):
         raise ValueError('unrecognized mode %s' % mode)
 
 
+def dataset_subj(sample_ratio, mode, seed):
+    if mode == 'split':
+        train_dev_split(train_raw_path=SubjCfg.train_norm_path,
+                        train_path=SubjCfg.train_path,
+                        dev_path=SubjCfg.dev_path,
+                        test_raw_path=None,
+                        test_path=None,
+                        label_index=0,
+                        text_index=1)
+    elif mode == 'sampling':
+        train_ratio(train_path=SubjCfg.train_path,
+                    train_ratio_path=SubjCfg.train_ratio_path % str(sample_ratio),
+                    sample_ratio=sample_ratio,
+                    seed=seed)
+    else:
+        raise ValueError('unrecognized mode %s' % mode)
+
+
 if __name__ == '__main__':
     # dataset_TREC(sample_ratio=None, mode='split', seed=2020)
     # dataset_TREC(sample_ratio=0.5, mode='sampling', seed=2020)
 
     # dataset_stance(sample_ratio=None, mode='split', seed=2020)
-    dataset_stance(sample_ratio=0.1, mode='sampling', seed=2049)
+    # dataset_stance(sample_ratio=0.1, mode='sampling', seed=2049)
 
     # dataset_sst(sample_ratio=0.5, seed=2020)
 
@@ -336,4 +355,7 @@ if __name__ == '__main__':
 
     # dataset_r8(sample_ratio=None, mode='split', seed=2020)
     # dataset_r8(sample_ratio=0.5, mode='sampling', seed=2028)
+
+    # dataset_subj(sample_ratio=None, mode='split', seed=2020)
+    dataset_subj(sample_ratio=0.01, mode='sampling', seed=2020)
     pass

@@ -8,6 +8,7 @@ import my_library
 from config.common import *
 from config.stance import StanceCfgCNN
 from config.sst import SSTCfgCNN
+from config.subj import SubjCfgCNN
 from config.r8 import *
 from config.offensive import *
 from config.trec import *
@@ -21,6 +22,13 @@ seed = 2020
 torch.manual_seed(seed)
 random.seed(seed)
 np.random.seed(seed)
+
+
+def subj():
+    if SubjCfgCNN.hp.phase == DirCfg.phase_real_str:
+        run_real(SubjCfgCNN)
+    else:
+        raise ValueError('phase name not found.')
 
 
 def stance():
@@ -59,7 +67,8 @@ def trec():
 
 
 if __name__ == '__main__':
-    stance()
+    subj()
+    # stance()
     # sst()
     # r8()
     # offensive()

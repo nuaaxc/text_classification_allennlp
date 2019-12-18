@@ -33,8 +33,8 @@ def run(cfg):
     params_ = Params(
         {
             "config_file": cfg,
-            # "train_data_path": cfg.train_ratio_path % cfg.hp.file_ratio,
-            "train_data_path": cfg.eda_train_ratio_path % cfg.hp.file_ratio,
+            "train_data_path": cfg.train_ratio_path % cfg.hp.file_ratio,
+            # "train_data_path": cfg.eda_train_ratio_path % cfg.hp.file_ratio,
             "validation_data_path": cfg.dev_path,
             "test_data_path": cfg.test_path,
 

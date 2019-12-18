@@ -1,8 +1,8 @@
 from config.common import *
 
 
-class StanceCfg(DirCfg):
-    corpus_name = 'Stance'
+class SubjCfg(DirCfg):
+    corpus_name = 'Subj'
     max_vocab_size = 100000
     max_seq_len = 30
 
@@ -18,20 +18,18 @@ class StanceCfg(DirCfg):
         root = ''
         root_local = ''
 
-    target = ['a', 'cc', 'fm', 'hc', 'la']
-
     training_size = {
-        0.05: 129,
-        0.1: 260,
-        0.2: 523,
-        0.5: 1309,
-        1: 2621,
+        0.01: 80,
+        0.05: 404,
+        0.1: 809,
+        0.2: 1619,
+        0.5: 4049,
+        1: 8099,
     }
 
     labels = [
-        '__label__FAVOR',
-        '__label__AGAINST',
-        '__label__NONE'
+        '__label__SUBJ',
+        '__label__OBJ',
     ]
 
     n_label = len(labels)
@@ -43,8 +41,8 @@ class StanceCfg(DirCfg):
 
     model_path = os.path.join(model_dir, 'model_%s.th')
 
-    train_raw_path = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-%s.txt')
-    train_raw_path_all_target = os.path.join(data_dir, 'semeval2016-task6-subtaskA-train-dev-all.txt')
+    raw_plot = os.path.join(data_dir, 'plot.tok.gt9.5000')
+    raw_quote = os.path.join(data_dir, 'quote.tok.gt9.5000')
     train_norm_path = os.path.join(data_dir, 'train_norm.txt')
     train_path = os.path.join(data_dir, 'train_1p.txt')
     train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
@@ -52,8 +50,6 @@ class StanceCfg(DirCfg):
 
     dev_path = os.path.join(data_dir, 'dev.txt')
 
-    test_raw_path = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-%s.txt')
-    test_raw_path_all_target = os.path.join(data_dir, 'SemEval2016-Task6-subtaskA-test-all.txt')
     test_path = os.path.join(data_dir, 'test.txt')
 
     train_real_meta_path = os.path.join(result_dir, 'train_real_meta_%s_%sp.th')
@@ -68,7 +64,7 @@ class StanceCfg(DirCfg):
     img_quant_path = os.path.join(result_dir, 'quant_%s.png' % corpus_name)
 
 
-class StanceCfgBert(StanceCfg):
+class SubjCfgBert(SubjCfg):
     hp = HP()
     # hp.phase = DirCfg.phase_real_str
     # hp.phase = DirCfg.phase_gan_str
@@ -97,10 +93,10 @@ class StanceCfgBert(StanceCfg):
     else:
         raise ValueError('Phase name not found.')
 
-    hp.batch_per_epoch = int(StanceCfg.training_size[hp.file_ratio] / hp.batch_size) + 1
+    hp.batch_per_epoch = int(SubjCfg.training_size[hp.file_ratio] / hp.batch_size) + 1
 
 
-class StanceCfgLSTM(StanceCfg):
+class SubjCfgLSTM(SubjCfg):
     model_name = 'lstm'
     hp = HP()
     hp.phase = DirCfg.phase_real_str
@@ -113,11 +109,11 @@ class StanceCfgLSTM(StanceCfg):
     hp.d_dense = 128
 
 
-class StanceCfgCNN(StanceCfg):
+class SubjCfgCNN(SubjCfg):
     model_name = 'cnn'
     hp = HP()
     hp.phase = DirCfg.phase_real_str
-    hp.file_ratio = 0.1
+    hp.file_ratio = 0.05
     hp.patience = 3
     hp.cuda_device = 0
     hp.lr = 1e-4
