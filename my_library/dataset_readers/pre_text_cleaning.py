@@ -8,7 +8,6 @@ def clean_dummy_text(string):
 
 
 def clean_tweet_text(tweet, remove_stop):
-    processed_tweet = []
     tweet = tweet.lower()  # lower case
     tweet = re.sub(r'((www\.[\S]+)|(https?://[\S]+))', ' URL ', tweet)  # URLs
     tweet = re.sub(r'@(\S+)', r'USER_\1', tweet)  # @handle
@@ -19,6 +18,7 @@ def clean_tweet_text(tweet, remove_stop):
     tweet = preprocess_emojis(tweet)  # Replace emojis with either EMO_POS or EMO_NEG
     tweet = re.sub(r'\s+', ' ', tweet)  # Replace multiple spaces with a single space
 
+    processed_tweet = []
     for word in tweet.split():
         word = preprocess_word(word)
         if remove_stop:
@@ -29,7 +29,8 @@ def clean_tweet_text(tweet, remove_stop):
             processed_tweet.append(word)
 
     tweet = ' '.join(processed_tweet)
-    tokens = [tok.lemma_ for tok in spacy_en.tokenizer(tweet) if tok.lemma]
+    # tokens = [tok.lemma_ for tok in spacy_en.tokenizer(tweet) if tok.lemma]
+    tokens = [tok.text for tok in spacy_en(tweet)]
     return ' '.join(tokens)
 
 
@@ -83,7 +84,7 @@ def is_valid_word(word):
 
 
 def preprocess_word(word):
-    word = word.strip('“”\'"?!,.():;‘’')  # Remove punctuation
+    word = word.strip('“”\'"?!,.():;‘’—_*')  # Remove punctuation
     word = re.sub(r'(.)\1+', r'\1\1', word)  # Convert >= 2 letter repetitions to 2 letter, e.g., funnnnny --> funny
     word = re.sub(r'[-|\']', '', word)  # Remove - & '
     word = re.sub(

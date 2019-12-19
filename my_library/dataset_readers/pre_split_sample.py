@@ -8,6 +8,7 @@ from config.trec import TRECCfg
 from config.subj import SubjCfg
 from config.cr import CRCfg
 from config.mr import MRCfg
+from config.offensive import OffensiveCfg
 
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text, clean_normal_text
 
@@ -213,16 +214,16 @@ def dataset_affect(sample_ratio, seed):
 
 def dataset_offensive(sample_ratio, mode, seed):
     if mode == 'split':
-        train_dev_split(train_raw_path=OffensiveConfig.train_norm_path,
-                        train_path=OffensiveConfig.train_path,
-                        dev_path=OffensiveConfig.dev_path,
+        train_dev_split(train_raw_path=OffensiveCfg.train_norm_path,
+                        train_path=OffensiveCfg.train_path,
+                        dev_path=OffensiveCfg.dev_path,
                         test_raw_path=None,
                         test_path=None,
                         label_index=0,
                         text_index=1)
     elif mode == 'sampling':
-        train_ratio(train_path=OffensiveConfig.train_path,
-                    train_ratio_path=OffensiveConfig.train_ratio_path % str(sample_ratio),
+        train_ratio(train_path=OffensiveCfg.train_path,
+                    train_ratio_path=OffensiveCfg.train_ratio_path % str(sample_ratio),
                     sample_ratio=sample_ratio,
                     seed=seed)
     else:
@@ -373,7 +374,7 @@ if __name__ == '__main__':
     # dataset_TREC(sample_ratio=0.5, mode='sampling', seed=2020)
 
     # dataset_stance(sample_ratio=None, mode='split', seed=2020)
-    # dataset_stance(sample_ratio=0.1, mode='sampling', seed=2049)
+    # dataset_stance(sample_ratio=0.5, mode='sampling', seed=2049)
 
     # dataset_sst(sample_ratio=0.5, seed=2020)
 
@@ -386,7 +387,7 @@ if __name__ == '__main__':
     # dataset_affect(sample_ratio=0.8, seed=2020)
 
     # dataset_offensive(sample_ratio=None, mode='split', seed=2020)
-    # dataset_offensive(sample_ratio=0.5, mode='sampling', seed=2020)
+    # dataset_offensive(sample_ratio=0.02, mode='sampling', seed=2020)
 
     # dataset_newsgroups(sample_ratio=None, mode='split', seed=2020)
     # dataset_newsgroups(sample_ratio=0.5, mode='sampling', seed=2020)
