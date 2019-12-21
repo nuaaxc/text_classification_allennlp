@@ -1,5 +1,5 @@
 import logging
-
+import re
 from config.stance import StanceCfg
 from my_library.dataset_readers.pre_text_cleaning import clean_tweet_text
 
@@ -64,6 +64,7 @@ def normalize_file(input_path, output_path, clean_text, skip_header):
                 continue
             _, _, tweet, label = line
             label = '__label__' + label
+            tweet = re.sub(r'#SemST', '', tweet)  # remove #SemST
             tweet = clean_text(tweet, remove_stop=False)
             f_out.write(label + '\t' + tweet + '\n')
     print('Saved to %s' % output_path)
@@ -73,15 +74,15 @@ if __name__ == '__main__':
     # baby_mention_stats()
     # merge_all_stance_target(StanceConfig.train_raw_path, StanceConfig.train_raw_path_all)
     # merge_all_stance_target(StanceConfig.test_raw_path, StanceConfig.test_raw_path_all)
-    # normalize_file(StanceConfig.train_raw_path_all_target,
-    #                StanceConfig.train_norm_path,
+    # normalize_file(StanceCfg.train_raw_path_all_target,
+    #                StanceCfg.train_norm_path,
     #                clean_tweet_text,
     #                skip_header=True)
-    # normalize_file(StanceConfig.test_raw_path_all_target,
-    #                StanceConfig.test_path,
+    # normalize_file(StanceCfg.test_raw_path_all_target,
+    #                StanceCfg.test_path,
     #                clean_tweet_text,
     #                skip_header=True)
-    count_vocab_size()
+    # count_vocab_size()
     pass
 
 

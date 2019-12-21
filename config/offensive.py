@@ -15,11 +15,13 @@ class OffensiveCfg(DirCfg):
     hp.cuda_device = 0
 
     hp.training_size = {
+        0.01: 118,
+        0.02: 238,
         0.05: 595,
         0.1: 1191,
         0.2: 2383,
         0.5: 5958,
-        1: 11916,
+        1: 11911,
     }
 
     if hp.phase == DirCfg.phase_real_str:               # real

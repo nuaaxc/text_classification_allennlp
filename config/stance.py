@@ -21,6 +21,8 @@ class StanceCfg(DirCfg):
     target = ['a', 'cc', 'fm', 'hc', 'la']
 
     training_size = {
+        0.01: 24,
+        0.02: 51,
         0.05: 129,
         0.1: 260,
         0.2: 523,

@@ -1,3 +1,5 @@
+import re
+
 from config.offensive import OffensiveCfg
 from my_library.dataset_readers.pre_text_cleaning import clean_dummy_text, clean_tweet_text
 
@@ -37,11 +39,13 @@ def normalize_train_file(input_path, output_path, clean_text, skip_header):
             if not line or len(line) != 5:
                 raise ValueError('Invalid row found. %s' % line)
             _, text, label, _, _ = line
+            text = re.sub(r'@USER', '', text)  # remove @USER
+            text = re.sub(r'URL', '', text)  # remove URL
             text = clean_text(text, remove_stop=False)
             if len(text) > 0:
                 f_out.write(label + '\t' + text + '\n')
             else:
-                raise ValueError('Empty text after pre-processing. %s' % text)
+                print(line[1])
     print('Saved to %s' % output_path)
 
 
@@ -63,24 +67,26 @@ def normalize_test_file(input_path, output_path, clean_text, skip_header):
                 raise ValueError('Invalid row found. %s' % line)
             _id, text, = line
             label = id_label[_id]
+            text = re.sub(r'@USER', '', text)  # remove USER_user
+            text = re.sub(r'URL', '', text)  # remove URL
             text = clean_text(text, remove_stop=False)
             if len(text) > 0:
                 f_out.write(label + '\t' + text + '\n')
             else:
-                raise ValueError('Empty text after pre-processing. %s' % text)
+                print(line[1])
     print('Saved to %s' % output_path)
 
 
 if __name__ == '__main__':
-    # normalize_train_file(OffensiveConfig.train_raw_path,
-    #                      OffensiveConfig.train_norm_path,
-    #                      clean_tweet_text,
-    #                      skip_header=True)
-    # normalize_test_file(OffensiveConfig.test_raw_path,
-    #                     OffensiveConfig.test_path,
-    #                     clean_tweet_text,
-    #                     skip_header=True)
-    count_vocab_size()
+    normalize_train_file(OffensiveCfg.train_raw_path,
+                         OffensiveCfg.train_norm_path,
+                         clean_tweet_text,
+                         skip_header=True)
+    normalize_test_file(OffensiveCfg.test_raw_path,
+                        OffensiveCfg.test_path,
+                        clean_tweet_text,
+                        skip_header=True)
+    # count_vocab_size()
     pass
 
 
