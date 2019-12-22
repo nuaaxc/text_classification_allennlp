@@ -13,11 +13,16 @@ class DirCfg(object):
         BERT_VOC = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased-vocab.txt')
         BERT_MODEL = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased.tar.gz')
 
-    elif 'home' in home:
-        W2V_DIR = '/home/xu052/glove/'
-        GLOVE_840B_300D = ''
-        BERT_VOC = ''
-        BERT_MODEL = ''
+    elif 'home/chang' in home:
+        W2V_DIR = os.path.join(home, 'Dropbox/resources/pretrained/word_vec/')
+        GLOVE_840B_300D = os.path.join(W2V_DIR, 'glove.840B.300d.txt')
+        GLOVE_840B_300D_DIM = 300
+        GLOVE_TWITTER_27B_200D = os.path.join(W2V_DIR, 'glove.twitter.27B.200d.txt')
+        GLOVE_TWITTER_27B_200D_DIM = 200
+        BERT_VOC = os.path.join(home, 'Dropbox/resources/pretrained/bert/bert-base-uncased-vocab.txt')
+        BERT_MODEL = os.path.join(home, 'Dropbox/resources/pretrained/bert/bert-base-uncased.tar.gz')
+        ROOT_DIR = os.path.join(home, 'Dropbox/project/%s/dataset/%s')
+        ROOT_LOCAL_DIR = os.path.join(home, 'project/%s/dataset/%s')
     else:
         W2V_DIR = '/Users/xu052/Documents/project/glove/'
         GLOVE_840B_300D = ''

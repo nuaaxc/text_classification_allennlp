@@ -83,8 +83,8 @@ def trec():
 
 
 if __name__ == '__main__':
-    mr()
-    # cr()
+    # mr()
+    cr()
     # subj()
     # stance()
     # sst()

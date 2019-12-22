@@ -11,9 +11,9 @@ class CRCfg(DirCfg):
                             % (DirCfg.project_name, corpus_name))
         root_local = os.path.join(DirCfg.home, 'Documents/data61/project/%s/dataset/%s'
                                   % (DirCfg.project_name, corpus_name))
-    elif 'home' in DirCfg.home:
-        root = '/home/xu052/%s/dataset/%s/' % (DirCfg.project_name, corpus_name)
-        root_local = ''
+    elif 'home/chang' in DirCfg.home:
+        root = DirCfg.ROOT_DIR % (DirCfg.project_name, corpus_name)
+        root_local = DirCfg.ROOT_LOCAL_DIR % (DirCfg.project_name, corpus_name)
     else:
         root = ''
         root_local = ''
