@@ -41,22 +41,13 @@ class TRECCfg(DirCfg):
 
     hp.batch_per_epoch = int(hp.training_size[hp.file_ratio] / hp.batch_size) + 1
 
-    if 'C:' in DirCfg.home:
-        root = os.path.join(DirCfg.home, 'OneDrive/data61/project/%s/dataset/%s'
-                            % (DirCfg.project_name, corpus_name))
-        root_local = os.path.join(DirCfg.home, 'Documents/data61/project/%s/dataset/%s'
-                                  % (DirCfg.project_name, corpus_name))
-    elif 'home' in DirCfg.home:
-        root = '/home/xu052/%s/dataset/%s/' % (DirCfg.project_name, corpus_name)
-        root_local = ''
-    else:
-        root = ''
-        root_local = ''
-
     # 6 classes
     labels = ['NUM', 'DESC', 'HUM', 'LOC', 'ENTY', 'ABBR']
 
     n_label = len(labels)
+
+    root = DirCfg.ROOT_DIR % (DirCfg.project_name, corpus_name)
+    root_local = DirCfg.ROOT_LOCAL_DIR % (DirCfg.project_name, corpus_name)
 
     data_dir = os.path.join(root, 'data')
     cache_dir = os.path.join(root, 'cache')
@@ -68,7 +59,8 @@ class TRECCfg(DirCfg):
     train_raw_path = os.path.join(data_dir, 'train_raw.txt')
     train_norm_path = os.path.join(data_dir, 'train_norm.txt')
     train_path = os.path.join(data_dir, 'train_1p.txt')
-    train_ratio_path = os.path.join(data_dir, 'train_%sp.txt')
+    train_path_aug = os.path.join(data_dir, 'train_1p_%s_n_64_p_%s.txt')
+    train_path_ratio = os.path.join(data_dir, 'train_%sp_%s_n_64_p_%s.txt')
 
     dev_path = os.path.join(data_dir, 'dev.txt')
 

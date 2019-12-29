@@ -4,6 +4,7 @@ import os
 class DirCfg(object):
     project_name = 'text_classification'
     home = str(os.path.expanduser('~'))
+
     if 'C:' in home:
         W2V_DIR = os.path.join(home, 'Downloads/dataset/word_vec/')
         GLOVE_840B_300D = os.path.join(W2V_DIR, 'glove.840B.300d.txt')
@@ -12,8 +13,10 @@ class DirCfg(object):
         GLOVE_TWITTER_27B_200D_DIM = 200
         BERT_VOC = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased-vocab.txt')
         BERT_MODEL = os.path.join(home, 'Downloads/dataset/bert/bert-base-uncased.tar.gz')
+        ROOT_DIR = ''
+        ROOT_LOCAL_DIR = ''
 
-    elif 'home/chang' in home:
+    elif 'chang' in home:
         W2V_DIR = os.path.join(home, 'Dropbox/resources/pretrained/word_vec/')
         GLOVE_840B_300D = os.path.join(W2V_DIR, 'glove.840B.300d.txt')
         GLOVE_840B_300D_DIM = 300
@@ -28,6 +31,8 @@ class DirCfg(object):
         GLOVE_840B_300D = ''
         BERT_VOC = ''
         BERT_MODEL = ''
+        ROOT_DIR = ''
+        ROOT_LOCAL_DIR = ''
 
     phase_real_str = 'real'
     phase_gan_str = 'gan'

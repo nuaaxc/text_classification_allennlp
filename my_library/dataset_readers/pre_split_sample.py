@@ -124,7 +124,8 @@ def train_ratio(train_path,
         if skip_header:
             next(f)
         for line in f:
-            label, text = line.strip().split('\t')
+            _id, label, text = line.strip().split('\t')
+
             label_train[label].append(text)
             n_training_set += 1
     ###########
@@ -297,7 +298,7 @@ def dataset_stance(sample_ratio, mode, seed):
         raise ValueError('unrecognized mode %s' % mode)
 
 
-def dataset_TREC(sample_ratio, mode, seed):
+def dataset_TREC(sample_ratio, mode, aug_method=None, aug_ratio=None, seed=999):
     if mode == 'split':
         train_dev_split(train_raw_path=TRECCfg.train_norm_path,
                         train_path=TRECCfg.train_path,
@@ -307,8 +308,8 @@ def dataset_TREC(sample_ratio, mode, seed):
                         label_index=0,
                         text_index=1)
     elif mode == 'sampling':
-        train_ratio(train_path=TRECCfg.train_path,
-                    train_ratio_path=TRECCfg.train_ratio_path % str(sample_ratio),
+        train_ratio(train_path=TRECCfg.train_path_aug % (aug_method, aug_ratio),
+                    train_ratio_path=TRECCfg.train_path_ratio % (str(sample_ratio), aug_method, aug_ratio),
                     sample_ratio=sample_ratio,
                     seed=seed)
     else:
@@ -371,7 +372,7 @@ def dataset_mr(sample_ratio, mode, seed):
 
 if __name__ == '__main__':
     # dataset_TREC(sample_ratio=None, mode='split', seed=2020)
-    # dataset_TREC(sample_ratio=0.5, mode='sampling', seed=2020)
+    dataset_TREC(sample_ratio=0.5, mode='sampling', aug_method='eda', aug_ratio=0.1, seed=2020)
 
     # dataset_stance(sample_ratio=None, mode='split', seed=2020)
     # dataset_stance(sample_ratio=0.5, mode='sampling', seed=2049)
