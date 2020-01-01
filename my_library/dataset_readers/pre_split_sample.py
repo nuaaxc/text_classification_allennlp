@@ -1,4 +1,5 @@
 import os
+from pprint import pprint
 import random
 from collections import defaultdict
 
@@ -118,42 +119,41 @@ def train_ratio(train_path,
     ###########
     # Load training data
     ###########
-    label_train = defaultdict(list)
+    label_ids = defaultdict(list)
+    id_ori_text = {}
+    id_aug_text = defaultdict(list)
     n_training_set = 0
     with open(train_path, encoding=encoding) as f:
         if skip_header:
             next(f)
         for line in f:
             _id, label, text = line.strip().split('\t')
-
-            label_train[label].append(text)
-            n_training_set += 1
+            if '.' not in _id:
+                label_ids[label].append(_id)
+                id_ori_text[_id] = text
+                n_training_set += 1
+            else:
+                _id = _id.split('.')[0]
+                id_aug_text[_id].append(text)
     ###########
     # Sampling
     ###########
+    n_training_set_check = 0
     label_train_sample = defaultdict(list)
-    for label, train in label_train.items():
+    for label, train in label_ids.items():
         print(label)
         training_size = len(train)
-        print('\tFull training size:', training_size)
+        n_training_set_check += training_size
+        print('\tFull size:', training_size)
         sample_size = int(sample_ratio * training_size)
         print('\tSample size:', sample_size)
         samples = random.sample(train, sample_size)
         random.shuffle(samples)
         label_train_sample[label] = samples
 
-    #################
     # Sanctity Check
-    #################
-    print('Sanctity Check ...')
-    for label in label_train.keys():
-        all_examples = label_train[label]
-        sampled_train = label_train_sample[label]
-        print('[Label]', label)
-        assert len(sampled_train)
-        print('training set size:', len(sampled_train))
-        assert len(set(sampled_train) & set(all_examples)) == len(set(sampled_train))
-
+    assert n_training_set_check == n_training_set
+    print('Total full size:', n_training_set)
     ##################
     # Saving to files
     ##################
@@ -162,9 +162,10 @@ def train_ratio(train_path,
     with open(train_ratio_path, 'w', encoding='utf-8') as f:
         for label, samples in label_train_sample.items():
             for sample in samples:
-                f.write(label + '\t' + sample)
-                f.write('\n')
+                f.write(sample + '\t' + label + '\t' + id_ori_text[sample] + '\n')
                 n_sample += 1
+                for j in range(len(id_aug_text[sample])):
+                    f.write('%s.%s' % (sample, j+1) + '\t' + label + '\t' + id_aug_text[sample][j] + '\n')
     print('[saved] %s (%.4f) samples.' % (n_sample, n_sample / n_training_set))
 
 
@@ -372,7 +373,7 @@ def dataset_mr(sample_ratio, mode, seed):
 
 if __name__ == '__main__':
     # dataset_TREC(sample_ratio=None, mode='split', seed=2020)
-    dataset_TREC(sample_ratio=0.5, mode='sampling', aug_method='eda', aug_ratio=0.1, seed=2020)
+    dataset_TREC(sample_ratio=0.02, mode='sampling', aug_method='eda', aug_ratio=0.1, seed=2020)
 
     # dataset_stance(sample_ratio=None, mode='split', seed=2020)
     # dataset_stance(sample_ratio=0.5, mode='sampling', seed=2049)
