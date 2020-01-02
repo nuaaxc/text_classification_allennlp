@@ -21,6 +21,9 @@ def run(cfg):
         os.makedirs(model_dir)
 
     batch_size = cfg.hp.batch_size
+    aug_method = cfg.hp.aug_method
+    aug_ratio = cfg.hp.aug_ratio
+    aug_num = cfg.hp.aug_num
     lr = cfg.hp.lr
     cuda_device = cfg.hp.cuda_device
     patience = cfg.hp.patience
@@ -33,7 +36,7 @@ def run(cfg):
     params_ = Params(
         {
             "config_file": cfg,
-            "train_data_path": cfg.train_ratio_path % cfg.hp.file_ratio,
+            "train_data_path": cfg.train_path_ratio % (cfg.hp.file_ratio, aug_method, aug_ratio),
             # "train_data_path": cfg.eda_train_ratio_path % cfg.hp.file_ratio,
             "validation_data_path": cfg.dev_path,
             "test_data_path": cfg.test_path,
@@ -47,7 +50,8 @@ def run(cfg):
                         "type": "single_id",
                         "token_min_padding_length": filter_width
                     }
-                }
+                },
+                "aug_num": aug_num
             },
             "iterator": {
                 "type": "bucket",
@@ -70,6 +74,7 @@ def run(cfg):
                     "type": "cnn",
                     "embedding_dim": cfg.GLOVE_840B_300D_DIM,
                     "num_filters": num_filters,
+                    "ngram_filter_sizes": (filter_width,),
                     "output_dim": d_dense,
                 },
                 "feed_forward": {

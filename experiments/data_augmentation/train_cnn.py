@@ -18,7 +18,7 @@ from config.trec import *
 from experiments.data_augmentation.train_cnn_real import run as run_real
 
 logger = logging.getLogger(__name__)
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
 
 seed = 2020
 torch.manual_seed(seed)
@@ -76,19 +76,20 @@ def offensive():
 
 
 def trec():
-    if TRECCfg.hp.phase == DirCfg.phase_real_str:
-        run_real(TRECCfg)
+    if TRECCfgCNN.hp.phase == DirCfg.phase_real_str:
+        run_real(TRECCfgCNN)
     else:
         raise ValueError('phase name not found.')
 
 
 if __name__ == '__main__':
     # mr()
-    cr()
+    # cr()
     # subj()
     # stance()
     # sst()
     # r8()
     # offensive()
-    # trec()
+    trec()
+
 

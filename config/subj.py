@@ -6,18 +6,6 @@ class SubjCfg(DirCfg):
     max_vocab_size = 100000
     max_seq_len = 30
 
-    if 'C:' in DirCfg.home:
-        root = os.path.join(DirCfg.home, 'OneDrive/data61/project/%s/dataset/%s'
-                            % (DirCfg.project_name, corpus_name))
-        root_local = os.path.join(DirCfg.home, 'Documents/data61/project/%s/dataset/%s'
-                                  % (DirCfg.project_name, corpus_name))
-    elif 'home' in DirCfg.home:
-        root = '/home/xu052/%s/dataset/%s/' % (DirCfg.project_name, corpus_name)
-        root_local = ''
-    else:
-        root = ''
-        root_local = ''
-
     training_size = {
         0.01: 80,
         0.05: 404,
@@ -33,6 +21,9 @@ class SubjCfg(DirCfg):
     ]
 
     n_label = len(labels)
+
+    root = DirCfg.ROOT_DIR % (DirCfg.project_name, corpus_name)
+    root_local = DirCfg.ROOT_LOCAL_DIR % (DirCfg.project_name, corpus_name)
 
     data_dir = os.path.join(root, 'data')
     cache_dir = os.path.join(root, 'cache')

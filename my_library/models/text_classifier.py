@@ -41,9 +41,10 @@ class TextClassifier(Model):
     ) -> Dict[str, torch.Tensor]:
         mask = get_text_field_mask(tokens)
         embeddings = self.text_field_embedder(tokens)
+        embeddings = self.dropout(embeddings)
         encoder_out = self.encoder(embeddings, mask)
         encoder_out = self.dropout(encoder_out)
-        logits  = self.feed_forward(encoder_out)
+        logits = self.feed_forward(encoder_out)
         probs = torch.softmax(logits, dim=-1)
         output_dict = {'probs': probs, 'logits': logits}
 
